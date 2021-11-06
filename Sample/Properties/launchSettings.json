@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Sample": {
+      "commandName": "Project",
+      "commandLineArgs": "$(ProjectDir)../Shaders/Shaders.csproj"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# # Compiled Dynamic libraries
+# *.so
+# *.dylib
+# *.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# # Compiled Static libraries
+# *.lai
+# *.la
+# *.a
+# *.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+**/.vs
+**/x86
+**/x64
+**/bin
+**/obj
+**/temp
+!Libraries/dlls/x64
+!Libraries/libs/x64
+
+**/*.VC.db
+**/*.aps
+
+**/packages
+
+/Comparison
+/GameOfLife
+
+**/.DS_Store
+**/xcshareddata
+**/xcuserdata
+**/xcdebugger
+**/*.xcuserstate
+
+**/node_modules
+
+**/DerivedData
+
+**/.*
+!**/.git*
+!**/.eslintrc.json
+!**/.prettierrc
+
+**/Debug
+**/Output
+
+Libraries/includes/glm/out/
+Projects/Cross/Configs/UserCache.json
