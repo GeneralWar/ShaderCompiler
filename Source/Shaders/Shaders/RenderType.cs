@@ -4,8 +4,9 @@
 
 namespace General.Shaders
 {
-    public enum Language
-    {
-        GLSL,
-    }
+    public enum RenderType 
+	{
+		Opaque,
+		Transparent,
+	}
 }

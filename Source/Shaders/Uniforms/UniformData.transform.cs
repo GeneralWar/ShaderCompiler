@@ -1,10 +1,15 @@
-﻿namespace General.Shaders
+﻿// Author: 朱嘉灵(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
+namespace General.Shaders
 {
     public partial class UniformData
     {
+        [TypeName(Language.GLSL, nameof(Transform))]
         public class Transform
         {
-            public Matrix4 matrix { get; }
+            [UniformField(typeof(Transform))] public Matrix4 matrix { get; }
         }
     }
 }

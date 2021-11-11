@@ -4,8 +4,6 @@
 
 namespace General.Shaders
 {
-    public enum Language
-    {
-        GLSL,
-    }
+    [TypeName(Language.GLSL, "sampler2D")]
+    public class Sampler2D { }
 }
