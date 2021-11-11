@@ -1,3 +1,7 @@
+// Author: ÷ÏºŒ¡È(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
 using General.Shaders;
 using Microsoft.CodeAnalysis;
 using System;

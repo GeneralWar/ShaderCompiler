@@ -1,4 +1,8 @@
-﻿using Microsoft.CodeAnalysis;
+﻿// Author: 朱嘉灵(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;

@@ -1,4 +1,8 @@
-﻿using System;
+﻿// Author: 朱嘉灵(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
+using System;
 using System.Runtime.InteropServices;
 
 namespace General.Shaders
