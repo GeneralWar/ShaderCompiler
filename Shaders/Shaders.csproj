@@ -9,7 +9,6 @@
   <PropertyGroup Condition="'$(IsWindows)'=='true'">
     <TargetFramework>net5.0-windows</TargetFramework>
     <DefineConstants>TRACE;DEBUG;WINDOWS</DefineConstants>
-    <OutputPath>$(SolutionDir)Output/Debug/</OutputPath>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 

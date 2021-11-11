@@ -7,6 +7,6 @@
 
     public interface IFragmentSource
     {
-        void OnFragment();
+        void OnFragment(InputFragment input, UniformData uniforms, OutputFragment output);
     }
 }

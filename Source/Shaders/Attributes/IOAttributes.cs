@@ -3,22 +3,44 @@
 namespace General.Shaders
 {
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-    public class InputAttribute : Attribute
+    public class InputVertexAttribute : Attribute
     {
         public InputField Field { get; set; }
 
-        public InputAttribute(InputField field)
+        public InputVertexAttribute(InputField field)
         {
             this.Field = field;
         }
     }
 
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-    public class OutputAttribute : Attribute
+    public class OutputVertexAttribute : Attribute
     {
         public OutputField Field { get; set; }
 
-        public OutputAttribute(OutputField field)
+        public OutputVertexAttribute(OutputField field)
+        {
+            this.Field = field;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+    public class InputFragmentAttribute : Attribute
+    {
+        public InputField Field { get; set; }
+
+        public InputFragmentAttribute(InputField field)
+        {
+            this.Field = field;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+    public class OutputFragmentAttribute : Attribute
+    {
+        public OutputField Field { get; set; }
+
+        public OutputFragmentAttribute(OutputField field)
         {
             this.Field = field;
         }

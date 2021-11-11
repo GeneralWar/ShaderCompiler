@@ -2,9 +2,10 @@
 {
     public partial class UniformData
     {
+        [TypeName(Language.GLSL, nameof(Transform))]
         public class Transform
         {
-            public Matrix4 matrix { get; }
+            [UniformField(typeof(Transform))] public Matrix4 matrix { get; }
         }
     }
 }

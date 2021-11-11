@@ -1,5 +1,5 @@
 ﻿using General.Shaders;
-using System;
+using System.IO;
 
 namespace Sample
 {
@@ -7,7 +7,7 @@ namespace Sample
     {
         static void Main(string[] args)
         {
-            Compiler.CompileProject(args[0]);
+            Compiler.CompileProject(args[0], Language.GLSL, Path.GetFullPath("Shaders.dll"), "Shaders/GLSLs");
         }
     }
 }

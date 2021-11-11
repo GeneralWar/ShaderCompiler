@@ -1,8 +1,8 @@
-﻿namespace General.Shaders
-{
-    public abstract class Shader { }
+﻿using System;
 
-    public abstract class GraphicsShader : Shader
+namespace General.Shaders
+{
+    public abstract class GraphicsShader
     {
         public abstract IVertexSource VertexShader { get; }
         public abstract IFragmentSource FragmentShader { get; }
