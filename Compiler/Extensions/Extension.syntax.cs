@@ -103,6 +103,17 @@ static public partial class SyntaxExtensions
         {
             return name;
         }
+        return namespaceSyntax.GetFullName().Trim() + "." + name;
+    }
+
+    static public string GetFullName(this NamespaceDeclarationSyntax syntax)
+    {
+        string name = syntax.Name.GetFullName();
+        NamespaceDeclarationSyntax? namespaceSyntax = syntax.Parent as NamespaceDeclarationSyntax;
+        if (namespaceSyntax is null)
+        {
+            return name;
+        }
         return namespaceSyntax.Name.GetFullName().Trim() + "." + name;
     }
 
