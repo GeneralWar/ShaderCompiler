@@ -14,14 +14,16 @@ namespace General.Shaders
         [DataMember] public string? fragmentShader = null;
         [DataMember] public RenderType type;
         [DataMember] public int queue;
+        [DataMember] public PolygonType polygon;
 
         private ShaderConfig() { }
 
-        public ShaderConfig(string key, RenderType type, int queue)
+        public ShaderConfig(string key, RenderType type, int queue, PolygonType polygon)
         {
             this.key = key;
             this.type = type;
             this.queue = queue;
+            this.polygon = polygon;
         }
     }
 }

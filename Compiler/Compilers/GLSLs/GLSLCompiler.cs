@@ -427,11 +427,17 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
+            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue, shaderAttribute.Polygon);
             shader.vertexShader = this.FindVertexShaderPath(vertexShaderType);
             shader.fragmentShader = this.FindFragmentShaderPath(fragmentShaderType);
 
             string filename = Path.Join(this.OutputDirectory, shaderAttribute.Path + ".shader");
+            string? directory = Path.GetDirectoryName(filename);
+            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             DataContractJsonSerializer serailizer = new DataContractJsonSerializer(shader.GetType());
             using (MemoryStream stream = new MemoryStream())
             {
