@@ -44,14 +44,6 @@ namespace Shaders
         public override IFragmentSource FragmentShader => new DefaultTransparentFragmentShader();
     }
 
-    [GraphicsShader("Default/Transparent-LineList", RenderType.Transparent, RenderQueue.Transparent, Polygon = PolygonType.LineList)]
-    public class BackgroundTransparentLineListGraphicsShader : GraphicsShader
-    {
-        public override IVertexSource VertexShader => new DefaultVertexShader();
-
-        public override IFragmentSource FragmentShader => new DefaultTransparentFragmentShader();
-    }
-
     [GraphicsShader("Default/Opaque", RenderType.Opaque, RenderQueue.Geometry)]
     public class DefaultOpaqueGraphicsShader : GraphicsShader
     {

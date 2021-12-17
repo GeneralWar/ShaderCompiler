@@ -35,8 +35,6 @@ namespace General.Shaders
         public int Queue { get; set; }
         public RenderType Type { get; set; }
 
-        public PolygonType Polygon { get; set; } = PolygonType.TriangleList;
-
         public GraphicsShaderAttribute(string path, RenderType type, int queue)
         {
             this.Path = path;
