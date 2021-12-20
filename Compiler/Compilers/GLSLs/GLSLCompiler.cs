@@ -427,7 +427,7 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue, shaderAttribute.Polygon);
+            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
             shader.vertexShader = this.FindVertexShaderPath(vertexShaderType);
             shader.fragmentShader = this.FindFragmentShaderPath(fragmentShaderType);
 

@@ -12,6 +12,6 @@ namespace General.Shaders
 
     public class OutputFragment
     {
-        [LayoutLocation(0)] [OutputFragment(OutputField.Color)] public Vector4 color { get; set; }
+        [LayoutLocation(0)] [OutputFragment(OutputField.Color)] public Vector4 color;
     }
 }

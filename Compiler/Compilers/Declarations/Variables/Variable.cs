@@ -5,13 +5,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace General.Shaders
 {
@@ -75,9 +71,17 @@ namespace General.Shaders
             return type;
         }
 
-        public string AnalyzeMemberAccess(Compiler compiler, string name)
+        public string? AnalyzeMemberAccess(Compiler compiler, string name)
         {
             MemberInfo[] members = mType.GetMember(name);
+            Trace.Assert(1 == members.Length);
+
+            return compiler.AnalyzeMemberName(members[0]);
+        }
+
+        public string? AnalyzeElementAccess(Compiler compiler, ElementAccessExpressionSyntax syntax)
+        {
+            MemberInfo[] members = mType.GetMember(syntax.GetName());
             Trace.Assert(1 == members.Length);
 
             return compiler.AnalyzeMemberName(members[0]);

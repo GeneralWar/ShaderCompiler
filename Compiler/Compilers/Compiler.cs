@@ -122,10 +122,17 @@ namespace General.Shaders
             MemberInfo[] members = type.GetMember(name);
             Trace.Assert(1 == members.Length);
 
-            return this.AnalyzeMemberName(members[0]);
+            string? result = this.AnalyzeMemberName(members[0]);
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                Debugger.Break();
+                throw new InvalidDataException();
+            }
+
+            return result;
         }
 
-        internal string AnalyzeMemberName(MemberInfo memberInfo)
+        internal string? AnalyzeMemberName(MemberInfo memberInfo)
         {
             InputVertexAttribute? inputVertex = memberInfo.GetCustomAttribute<InputVertexAttribute>();
             if (inputVertex is not null)
@@ -163,7 +170,7 @@ namespace General.Shaders
                 return memberInfo.Name;
             }
 
-            throw new NotImplementedException();
+            return null;
         }
 
         protected abstract string internalAnalyzeInputVertexMemberName(MemberInfo memberInfo, InputVertexAttribute attribute);
@@ -184,18 +191,10 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            if (variable.Type.GetCustomAttribute<MemberCollectorAttribute>() is not null)
+            string? result = Declaration.AnalyzeElementAccess(this, variable.Type, elementName.Trim());
+            if (!string.IsNullOrWhiteSpace(result))
             {
-                string name = elementName.Trim();
-                if (name.EndsWith('"'))
-                {
-                    name = name.Substring(0, name.Length - 1);
-                }
-                if (name.StartsWith('"'))
-                {
-                    name = name.Substring(1);
-                }
-                return $"{variableName}.{name}";
+                return $"{variableName}.{result}";
             }
 
             return this.internalAnalyzeElementAccess(variableName, elementName);
@@ -241,6 +240,65 @@ namespace General.Shaders
                 }
             }
             return null;
+        }
+
+        internal Variable? GetVariable(ExpressionSyntax syntax)
+        {
+            MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax as MemberAccessExpressionSyntax;
+            if (memberAccessExpressionSyntax is not null)
+            {
+                return this.GetVariable(memberAccessExpressionSyntax.Expression);
+            }
+
+            IdentifierNameSyntax? identifierNameSyntax = syntax as IdentifierNameSyntax;
+            if (identifierNameSyntax is not null)
+            {
+                string name = identifierNameSyntax.GetName();
+                return this.GetVariable(name);
+            }
+
+            Debugger.Break();
+            throw new NotImplementedException();
+        }
+
+        internal Type GetType(ExpressionSyntax syntax)
+        {
+            MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax as MemberAccessExpressionSyntax;
+            if (memberAccessExpressionSyntax is not null)
+            {
+                return this.GetType(memberAccessExpressionSyntax.Expression);
+            }
+
+            IdentifierNameSyntax? identifierNameSyntax = syntax as IdentifierNameSyntax;
+            if (identifierNameSyntax is not null)
+            {
+                string name = identifierNameSyntax.GetName();
+                Variable? variable = this.GetVariable(name);
+                if (variable is null)
+                {
+                    Debugger.Break();
+                    throw new NotImplementedException();
+                }
+
+                return variable.Type;
+            }
+
+            Debugger.Break();
+            throw new NotImplementedException();
+        }
+
+        internal Type GetType(MemberAccessExpressionSyntax syntax)
+        {
+            Type ownerType = this.GetType(syntax.Expression);
+            string memberName = syntax.Name.GetName();
+            string memberFullName = syntax.Name.GetFullName();
+            if (memberName != memberFullName)
+            {
+                Debugger.Break();
+                throw new NotImplementedException();
+            }
+
+            return ownerType.GetMemberType(memberName);
         }
 
         public void PushSyntax(SyntaxNode syntax)
@@ -375,7 +433,7 @@ namespace General.Shaders
             {
                 throw new InvalidDataException();
             }
-                        
+
             string filename = this.internalCompileFragmentShader(type, attribute);
             mFragmentShaderPathMap.Add(type, filename);
         }

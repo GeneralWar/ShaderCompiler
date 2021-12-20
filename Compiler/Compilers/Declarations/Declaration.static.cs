@@ -145,7 +145,13 @@ namespace General.Shaders
             Variable? target = compiler.GetVariable(targetName);
             if (target is not null)
             {
-                return target.AnalyzeMemberAccess(compiler, memberName);
+                string? result = target.AnalyzeMemberAccess(compiler, memberName);
+                if (string.IsNullOrWhiteSpace(result))
+                {
+                    return $"{targetName}.{memberName}";
+                }
+
+                return result;
             }
 
             Type? type = compiler.GetType(targetName);
@@ -174,10 +180,46 @@ namespace General.Shaders
 
         static protected string AnalyzeElementAccessExpressionSyntax(Compiler compiler, ElementAccessExpressionSyntax syntax)
         {
-            string variableName = syntax.Expression.GetName();
             List<string> arguments = AnalyzeBracketedArgumentListSyntax(compiler, syntax.ArgumentList);
             Trace.Assert(1 == arguments.Count);
+
+            string? variableName = null;
+            ExpressionSyntax expression = syntax.Expression;
+
+            MemberAccessExpressionSyntax? memberAccessExpressionSyntax = expression as MemberAccessExpressionSyntax;
+            if (memberAccessExpressionSyntax is not null)
+            {
+                variableName = AnalyzeMemberAccessExpressionSyntax(compiler, memberAccessExpressionSyntax);
+                Type type = compiler.GetType(memberAccessExpressionSyntax);
+                return $"{variableName}.{AnalyzeElementAccess(compiler, type, arguments[0])}";
+            }
+
+            //if (!string.IsNullOrWhiteSpace(variableName))
+            //{
+            //    return variableName;
+            //}
+
+            variableName = expression.GetName();
             return compiler.AnalyzeElementAccess(variableName, arguments[0]);
+        }
+
+        static internal string? AnalyzeElementAccess(Compiler compiler, Type type, string elementName)
+        {
+            if (type.GetCustomAttribute<MemberCollectorAttribute>() is not null)
+            {
+                string name = elementName;
+                if (name.EndsWith('"'))
+                {
+                    name = name.Substring(0, name.Length - 1);
+                }
+                if (name.StartsWith('"'))
+                {
+                    name = name.Substring(1);
+                }
+                return name;
+            }
+
+            return null;
         }
 
         static protected List<string> AnalyzeBracketedArgumentListSyntax(Compiler compiler, BracketedArgumentListSyntax syntax)

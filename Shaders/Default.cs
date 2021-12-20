@@ -22,7 +22,9 @@ namespace Shaders
     {
         void IFragmentSource.OnFragment(InputFragment input, UniformData uniforms, OutputFragment output)
         {
-            output.color = ShaderFunctions.MapTexture(uniforms.texture0, input.uv0) * input.color;
+            Vector4 color = ShaderFunctions.MapTexture(uniforms.texture0, input.uv0) * input.color;
+            output.color["rgb"] = color["rgb"];
+            output.color.a = color.a;
         }
     }
 
