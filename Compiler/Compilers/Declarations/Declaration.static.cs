@@ -3,6 +3,7 @@
 // Copyright (C) General. Licensed under LGPL-2.1.
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
@@ -52,6 +53,12 @@ namespace General.Shaders
 
         static protected string AnalyzeExpressionSyntax(Compiler compiler, ExpressionSyntax syntax)
         {
+            LiteralExpressionSyntax? literalExpressionSyntax = syntax as LiteralExpressionSyntax;
+            if (literalExpressionSyntax is not null)
+            {
+                return AnalyzeLiteralExpressionSyntax(compiler, literalExpressionSyntax);
+            }
+
             MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax as MemberAccessExpressionSyntax;
             if (memberAccessExpressionSyntax is not null)
             {
@@ -82,6 +89,7 @@ namespace General.Shaders
                 return AnalyzeElementAccessExpressionSyntax(compiler, elementAccessExpressionSyntax);
             }
 
+            Debugger.Break();
             throw new NotImplementedException();
         }
 
@@ -138,6 +146,18 @@ namespace General.Shaders
             }
 
             throw new NotImplementedException();
+        }
+
+        static protected string AnalyzeLiteralExpressionSyntax(Compiler compiler, LiteralExpressionSyntax literalExpressionSyntax)
+        {
+            switch((SyntaxKind)literalExpressionSyntax.RawKind)
+            {
+                case SyntaxKind.NumericLiteralExpression:
+                    return literalExpressionSyntax.Token.ValueText;
+            }
+
+            Debugger.Break();
+            throw new InvalidDataException();
         }
 
         static protected string AnalyzeMemberAccessExpressionSyntax(Compiler compiler, string targetName, string memberName)
