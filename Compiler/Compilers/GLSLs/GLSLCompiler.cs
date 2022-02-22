@@ -430,6 +430,7 @@ namespace General.Shaders
             ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
             shader.vertexShader = this.FindVertexShaderPath(vertexShaderType);
             shader.fragmentShader = this.FindFragmentShaderPath(fragmentShaderType);
+            shader.polygonTypes = Array.ConvertAll(shaderType.GetCustomAttributes<PolygonTypeAttribute>().ToArray(), a => a.polygonType);
 
             string filename = Path.Join(this.OutputDirectory, shaderAttribute.Path + ".shader");
             DataContractJsonSerializer serailizer = new DataContractJsonSerializer(shader.GetType());

@@ -37,6 +37,11 @@ namespace Shaders
         }
     }
 
+    [PolygonType(PolygonType.LineList)]
+    [PolygonType(PolygonType.LineStrip)]
+    [PolygonType(PolygonType.TriangleList)]
+    [PolygonType(PolygonType.TriangleStrip)]
+    [PolygonType(PolygonType.TriangleFan)]
     [GraphicsShader("Default/Transparent", RenderType.Transparent, RenderQueue.Transparent)]
     public class DefaultTransparentGraphicsShader : GraphicsShader
     {
@@ -45,6 +50,11 @@ namespace Shaders
         public override IFragmentSource FragmentShader => new DefaultTransparentFragmentShader();
     }
 
+    [PolygonType(PolygonType.LineList)]
+    [PolygonType(PolygonType.LineStrip)]
+    [PolygonType(PolygonType.TriangleList)]
+    [PolygonType(PolygonType.TriangleStrip)]
+    [PolygonType(PolygonType.TriangleFan)]
     [GraphicsShader("Default/Opaque", RenderType.Opaque, RenderQueue.Geometry)]
     public class DefaultOpaqueGraphicsShader : GraphicsShader
     {
