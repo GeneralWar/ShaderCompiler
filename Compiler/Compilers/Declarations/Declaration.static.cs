@@ -95,9 +95,10 @@ namespace General.Shaders
 
         static protected string AnalyzeMemberAccessExpressionSyntax(Compiler compiler, MemberAccessExpressionSyntax syntax)
         {
+            string memberName = syntax.Name.GetName();
             if (syntax.Expression is IdentifierNameSyntax)
             {
-                return AnalyzeMemberAccessExpressionSyntax(compiler, syntax.Expression.GetName(), syntax.Name.GetName());
+                return AnalyzeMemberAccessExpressionSyntax(compiler, syntax.Expression.GetName(), memberName);
             }
 
             string prefix = "";
@@ -110,7 +111,6 @@ namespace General.Shaders
             if (memberAccessExpressionSyntax is not null)
             {
                 Type type = GetMemberType(compiler, memberAccessExpressionSyntax);
-                string memberName = syntax.Name.GetName();
                 if (type.GetCustomAttribute<MemberCollectorAttribute>() is not null)
                 {
                     return prefix + memberName;
@@ -118,9 +118,16 @@ namespace General.Shaders
                 return prefix + compiler.AnalyzeMemberName(type, memberName);
             }
 
+            InvocationExpressionSyntax? invocationExpressionSyntax = syntax.Expression as InvocationExpressionSyntax;
+            if (invocationExpressionSyntax is not null)
+            {
+                string targetName = AnalyzeInvocationExpressionSyntax(compiler, invocationExpressionSyntax);
+                Trace.Assert("." == syntax.OperatorToken.ValueText);
+                return $"{targetName}{syntax.OperatorToken.ValueText}{memberName}";
+            }
+
             {
                 string targetName = syntax.Expression.GetName();
-                string memberName = syntax.Name.GetName();
                 Trace.Assert("." == syntax.OperatorToken.ValueText);
                 //int separatorIndex = name.IndexOf('.');
                 //if (separatorIndex > -1)
