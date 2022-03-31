@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
@@ -24,5 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Source\Source.csproj" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="echo Build: $(ProjectName), Current Time: %25date:~0,4%25-%25date:~5,2%25-%25date:~8,2%25 %25time:~0,8%25" />
+  </Target>
 
 </Project>

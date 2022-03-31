@@ -18,4 +18,8 @@
     <ProjectReference Include="..\Shaders\Shaders.csproj" />
   </ItemGroup>
 
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="echo Build: $(ProjectName), Current Time: %25date:~0,4%25-%25date:~5,2%25-%25date:~8,2%25 %25time:~0,8%25" />
+  </Target>
+
 </Project>
