@@ -126,6 +126,12 @@ namespace General.Shaders
                 return $"{targetName}{syntax.OperatorToken.ValueText}{memberName}";
             }
 
+            ThisExpressionSyntax? thisExpressionSyntax = syntax.Expression as ThisExpressionSyntax;
+            if (thisExpressionSyntax is not null)
+            {
+                return memberName;
+            }
+
             {
                 string targetName = syntax.Expression.GetName();
                 Trace.Assert("." == syntax.OperatorToken.ValueText);
@@ -141,6 +147,23 @@ namespace General.Shaders
 
         static protected Type GetMemberType(Compiler compiler, MemberAccessExpressionSyntax syntax)
         {
+            ThisExpressionSyntax? thisExpressionSyntax = syntax.Expression as ThisExpressionSyntax;
+            if (thisExpressionSyntax is not null)
+            {
+                ClassDeclarationSyntax? classSyntax = compiler.GetCurrentClass();
+                if (classSyntax is null)
+                {
+                    throw new InvalidDataException();
+                }
+
+                Type? classType = compiler.GetType(classSyntax.GetName());
+                if (classType is null)
+                {
+                    throw new InvalidDataException();
+                }
+
+                return classType.GetMemberType(syntax.Name.GetName()) ?? throw new InvalidDataException();
+            }
             if (syntax.Expression is IdentifierNameSyntax)
             {
                 Variable? target = compiler.GetVariable(syntax.Expression.GetName());
@@ -317,7 +340,7 @@ namespace General.Shaders
 
                 string initializer = AnalyzeEqualsValueClauseSyntax(compiler, syntax.Initializer);
                 variables.Add($"{variableName} {initializer}");
-                compiler.PushLocalVariable(new Variable(typeSyntax, syntax));
+                compiler.PushVariable(new Variable(typeSyntax, syntax));
             }
             return variables;
         }

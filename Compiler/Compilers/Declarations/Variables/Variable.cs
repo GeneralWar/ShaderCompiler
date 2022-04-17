@@ -23,6 +23,20 @@ namespace General.Shaders
         private string mTypeString;
         public Type Type => mType;
 
+        public Variable(PropertyDeclarationSyntax syntax) : base(syntax.Identifier.ValueText)
+        {
+            mSyntax = syntax;
+            mType = this.analyzeType(syntax);
+            mTypeString = mType.FullName ?? mType.Name;
+        }
+
+        public Variable(FieldDeclarationSyntax syntax) : base(syntax.ToString())
+        {
+            mSyntax = syntax;
+            mType = this.analyzeType(syntax);
+            mTypeString = mType.FullName ?? mType.Name;
+        }
+
         public Variable(ParameterSyntax syntax) : base(syntax.Identifier.ValueText)
         {
             mSyntax = syntax;
@@ -38,6 +52,21 @@ namespace General.Shaders
         }
 
         protected override void internalAnalyze(Compiler compiler)
+        {
+            throw new NotImplementedException();
+        }
+
+        private Type analyzeType(PropertyDeclarationSyntax syntax)
+        {
+            if (syntax.Type is null)
+            {
+                throw new InvalidDataException();
+            }
+
+            return this.analyzeType(syntax.Type);
+        }
+
+        private Type analyzeType(FieldDeclarationSyntax syntax)
         {
             throw new NotImplementedException();
         }

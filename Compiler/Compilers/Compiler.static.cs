@@ -14,8 +14,7 @@ namespace General.Shaders
         {
             switch (language)
             {
-                case Language.GLSL:
-                    return new GLSLCompiler();
+                case Language.GLSL: return new GLSLCompiler();
             }
 
             throw new Exception();

@@ -3,35 +3,42 @@
 // Copyright (C) General. Licensed under LGPL-2.1.
 
 using General.Shaders;
+using General.Shaders.Uniforms;
 
 namespace Shaders
 {
-    [VertexShader("Default/Transparent")]
+    [VertexShader("Default/Default")]
     public class DefaultVertexShader : IVertexSource
     {
-        void IVertexSource.OnVertex(InputVertex input, UniformData uniforms, OutputVertex output)
+        public Transform transform { get; init; } = new Transform();
+
+        void IVertexSource.OnVertex(InputVertex input, OutputVertex output)
         {
-            output.position = uniforms.transform.matrix * new Vector4(input.position, 1.0f);
+            output.position = this.transform.matrix * new Vector4(input.position, 1.0f);
             output.color = input.color;
             output.uv0 = input.uv0;
         }
     }
 
-    [FragmentShader("Default/Transparent")]
-    public class DefaultTransparentFragmentShader : IFragmentSource
+    [FragmentShader("Default/TransparentDiffuse")]
+    public class DefaultDiffuseTransparentFragmentShader : IFragmentSource
     {
-        void IFragmentSource.OnFragment(InputFragment input, UniformData uniforms, OutputFragment output)
+        [UniformName("Diffuse")] public Sampler2D diffuse { get; init; } = new Sampler2D();
+
+        void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
-            output.color = ShaderFunctions.MapTexture(uniforms.texture0, input.uv0) * input.color;
+            output.color = ShaderFunctions.MapTexture(this.diffuse, input.uv0) * input.color;
         }
     }
 
-    [FragmentShader("Default/Opaque")]
-    public class DefaultOpaqueFragmentShader : IFragmentSource
+    [FragmentShader("Default/OpaqueDiffuse")]
+    public class DefaultDiffuseOpaqueFragmentShader : IFragmentSource
     {
-        void IFragmentSource.OnFragment(InputFragment input, UniformData uniforms, OutputFragment output)
+        [UniformName("Diffuse")] public Sampler2D diffuse { get; init; } = new Sampler2D();
+
+        void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
-            Vector4 color = ShaderFunctions.MapTexture(uniforms.texture0, input.uv0);
+            Vector4 color = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
             output.color = new Vector4(color["rgb"] * input.color.a, input.color.a);
         }
     }
@@ -41,12 +48,12 @@ namespace Shaders
     [PolygonType(PolygonType.TriangleList)]
     [PolygonType(PolygonType.TriangleStrip)]
     [PolygonType(PolygonType.TriangleFan)]
-    [GraphicsShader("Default/Transparent", RenderType.Transparent, RenderQueue.Transparent)]
-    public class DefaultTransparentGraphicsShader : GraphicsShader
+    [GraphicsShader("Default/TransparentDiffuse", RenderType.Transparent, RenderQueue.Transparent)]
+    public class DefaultDiffuseTransparentGraphicsShader : GraphicsShader
     {
         public override IVertexSource VertexShader => new DefaultVertexShader();
 
-        public override IFragmentSource FragmentShader => new DefaultTransparentFragmentShader();
+        public override IFragmentSource FragmentShader => new DefaultDiffuseTransparentFragmentShader();
     }
 
     [PolygonType(PolygonType.LineList)]
@@ -54,11 +61,11 @@ namespace Shaders
     [PolygonType(PolygonType.TriangleList)]
     [PolygonType(PolygonType.TriangleStrip)]
     [PolygonType(PolygonType.TriangleFan)]
-    [GraphicsShader("Default/Opaque", RenderType.Opaque, RenderQueue.Geometry)]
-    public class DefaultOpaqueGraphicsShader : GraphicsShader
+    [GraphicsShader("Default/OpaqueDiffuse", RenderType.Opaque, RenderQueue.Geometry)]
+    public class DefaultDiffuseOpaqueGraphicsShader : GraphicsShader
     {
         public override IVertexSource VertexShader => new DefaultVertexShader();
 
-        public override IFragmentSource FragmentShader => new DefaultOpaqueFragmentShader();
+        public override IFragmentSource FragmentShader => new DefaultDiffuseOpaqueFragmentShader();
     }
 }

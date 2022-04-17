@@ -1,4 +1,4 @@
-// Author: ÷ÏºŒ¡È(General)
+Ôªø// Author: Êú±ÂòâÁÅµ(General)
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
@@ -11,7 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-static public partial class ReflectionExtensions
+static public partial class Extension
 {
     static public bool ImplementInterface<TInterfaceType>(this Type type)
     {
@@ -113,5 +113,18 @@ static public partial class ReflectionExtensions
         }
 
         return attribute.Name;
+    }
+
+    static public Type? GetType(string fullTypeName)
+    {
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type? type = assembly.GetType(fullTypeName);
+            if (type is not null)
+            {
+                return type;
+            }
+        }
+        return null;
     }
 }

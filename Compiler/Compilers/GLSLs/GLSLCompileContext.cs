@@ -2,15 +2,12 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using System.Collections.Generic;
+
 namespace General.Shaders
 {
     class GLSLCompileContext : CompileContext
     {
-        public string? UniformDeclaration { get; private set; } = null;
 
-        public void SetUniformDeclaration(string uniforms)
-        {
-            this.UniformDeclaration = uniforms;
-        }
     }
 }

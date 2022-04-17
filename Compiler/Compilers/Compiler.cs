@@ -26,8 +26,7 @@ namespace General.Shaders
         internal Namespace Global => mGlobal;
 
         private Stack<SyntaxNode> mSyntaxStack = new Stack<SyntaxNode>();
-        private Stack<List<Variable>> mVariableStack = new Stack<List<Variable>>();
-        private Dictionary<SyntaxNode, List<Variable>> mLocalVariableStack = new Dictionary<SyntaxNode, List<Variable>>();
+        private Dictionary<SyntaxNode, List<Variable>> mVariableStack = new Dictionary<SyntaxNode, List<Variable>>();
 
         private Dictionary<Type, string> mVertexShaderPathMap = new Dictionary<Type, string>();
         private Dictionary<Type, string> mFragmentShaderPathMap = new Dictionary<Type, string>();
@@ -158,11 +157,6 @@ namespace General.Shaders
                 return memberInfo.Name;
             }
 
-            if (memberInfo.DeclaringType == typeof(UniformData))
-            {
-                return memberInfo.Name;
-            }
-
             throw new NotImplementedException();
         }
 
@@ -203,27 +197,24 @@ namespace General.Shaders
 
         protected abstract string internalAnalyzeElementAccess(string variableName, string elementName);
 
-        internal void PushVariables(IEnumerable<Variable> variables)
+        internal ClassDeclarationSyntax? GetCurrentClass()
         {
-            mVariableStack.Push(variables.ToList());
-        }
-
-        internal void PopVariables(IEnumerable<Variable> variables)
-        {
-            List<Variable> top = mVariableStack.Peek();
-            if (top.Count != variables.Count() || top.Intersect(variables).Count() != top.Count)
+            foreach (SyntaxNode syntax in mVariableStack.Keys.Reverse())
             {
-                throw new InvalidDataException();
+                ClassDeclarationSyntax? classSyntax = syntax as ClassDeclarationSyntax;
+                if (classSyntax is not null)
+                {
+                    return classSyntax;
+                }
             }
-
-            mVariableStack.Pop();
+            return null;
         }
 
         internal Variable? GetVariable(string name)
         {
             Trace.Assert(!name.Contains('.'));
 
-            foreach (List<Variable> variables in mLocalVariableStack.Values.Reverse())
+            foreach (List<Variable> variables in mVariableStack.Values.Reverse())
             {
                 Variable? v = variables.FirstOrDefault(v => v.Name == name);
                 if (v is not null)
@@ -231,18 +222,13 @@ namespace General.Shaders
                     return v;
                 }
             }
-
-            foreach (List<Variable> variables in mVariableStack.Reverse())
-            {
-                Variable? variable = variables.FirstOrDefault(v => v.Name == name);
-                if (variable is not null)
-                {
-                    return variable;
-                }
-            }
             return null;
         }
 
+        /// <summary>
+        /// Push syntax as current variables host
+        /// </summary>
+        /// <param name="syntax">scope like class, method, loop</param>
         public void PushSyntax(SyntaxNode syntax)
         {
             mSyntaxStack.Push(syntax);
@@ -255,11 +241,11 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            mLocalVariableStack.Remove(syntax);
+            mVariableStack.Remove(syntax);
             mSyntaxStack.Pop();
         }
 
-        internal void PushLocalVariable(Variable variable)
+        internal void PushVariable(Variable variable)
         {
             SyntaxNode? currentSyntaxNode;
             if (!mSyntaxStack.TryPeek(out currentSyntaxNode))
@@ -267,13 +253,30 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            List<Variable>? variables;
-            if (!mLocalVariableStack.TryGetValue(currentSyntaxNode, out variables))
+            List<Variable>? variableList;
+            if (!mVariableStack.TryGetValue(currentSyntaxNode, out variableList))
             {
-                mLocalVariableStack.Add(currentSyntaxNode, variables = new List<Variable>());
+                mVariableStack.Add(currentSyntaxNode, variableList = new List<Variable>());
             }
 
-            variables.Add(variable);
+            variableList.Add(variable);
+        }
+
+        internal void PushVariables(IEnumerable<Variable> variables)
+        {
+            SyntaxNode? currentSyntaxNode;
+            if (!mSyntaxStack.TryPeek(out currentSyntaxNode))
+            {
+                throw new InvalidDataException();
+            }
+
+            List<Variable>? variableList;
+            if (!mVariableStack.TryGetValue(currentSyntaxNode, out variableList))
+            {
+                mVariableStack.Add(currentSyntaxNode, variableList = new List<Variable>());
+            }
+
+            variableList.AddRange(variables);
         }
 
         public Type? GetType(string name)
@@ -284,6 +287,12 @@ namespace General.Shaders
                 if (type is not null)
                 {
                     return type;
+                }
+
+                ClassDeclarationSyntax? classDeclarationSyntax = syntax as ClassDeclarationSyntax;
+                if (classDeclarationSyntax is not null && classDeclarationSyntax.GetName() == name)
+                {
+                    return new DeclaredType(classDeclarationSyntax);
                 }
             }
 

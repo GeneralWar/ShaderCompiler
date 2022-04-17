@@ -30,7 +30,6 @@ namespace General.Shaders
             compiler.PushSyntax(mSyntax);
             compiler.PushVariables(mParameterList.Parametes);
             mContent = this.internalAnalyzeMethod(compiler, mSyntax);
-            compiler.PopVariables(mParameterList.Parametes);
             compiler.PopSyntax(mSyntax);
         }
 

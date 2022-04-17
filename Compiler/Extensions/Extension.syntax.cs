@@ -1,4 +1,4 @@
-// Author: ÷ÏºŒ¡È(General)
+Ôªø// Author: Êú±ÂòâÁÅµ(General)
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
-static public partial class SyntaxExtensions
+static public partial class Extension
 {
     static public bool CompareTypeName(this TypeSyntax syntax, string name)
     {
@@ -126,14 +126,28 @@ static public partial class SyntaxExtensions
         return syntax.Identifier.ValueText == name;
     }
 
+    static public bool CompareName(this PropertyDeclarationSyntax? syntax, string name)
+    {
+        if (syntax is null)
+        {
+            throw new NullReferenceException();
+        }
+
+        return syntax.Identifier.ValueText == name;
+    }
+
     static public bool CompareName(this MemberDeclarationSyntax syntax, string name)
     {
         if (syntax is MethodDeclarationSyntax)
         {
             return CompareName(syntax as MethodDeclarationSyntax, name);
         }
+        if (syntax is PropertyDeclarationSyntax)
+        {
+            return CompareName(syntax as PropertyDeclarationSyntax, name);
+        }
         Debugger.Break();
-        return false;
+        throw new NotImplementedException();
     }
 
     static public MemberDeclarationSyntax? Find(this SyntaxList<MemberDeclarationSyntax> members, string name)
@@ -161,7 +175,19 @@ static public partial class SyntaxExtensions
             throw new InvalidDataException();
         }
 
-        return root.GetType(name);
+        Type? type = root.GetType(name);
+        if (type is null)
+        {
+            NamespaceDeclarationSyntax? namespaceSyntax = syntax.GetCurrentNamespace();
+            if (namespaceSyntax is null)
+            {
+                throw new InvalidDataException();
+            }
+
+            string fullTypeName = namespaceSyntax.Name.GetFullName() + "." + name;
+            type = Extension.GetType(fullTypeName);
+        }
+        return type;
     }
 
     static public Type? GetTypeFromRoot(this SyntaxTree tree, string name)
@@ -177,10 +203,11 @@ static public partial class SyntaxExtensions
 
     static public Type? GetType(this CompilationUnitSyntax root, string name)
     {
+        Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (UsingDirectiveSyntax usingSyntax in root.Usings)
         {
             string fullname = usingSyntax.Name.GetFullName() + "." + name;
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly assembly in assemblies)
             {
                 Type? type = assembly.GetType(fullname);
                 if (type is not null)
@@ -189,7 +216,28 @@ static public partial class SyntaxExtensions
                 }
             }
         }
-
         return null;
+    }
+
+    static public NamespaceDeclarationSyntax? GetCurrentNamespace(this SyntaxNode syntax)
+    {
+        NamespaceDeclarationSyntax? namespaceSyntax = syntax as NamespaceDeclarationSyntax;
+        if (namespaceSyntax is not null)
+        {
+            return namespaceSyntax;
+        }
+
+        return syntax.Parent?.GetCurrentNamespace();
+    }
+
+    static public Attribute ToAttribute(this AttributeSyntax syntax)
+    {
+        Type? type = syntax.GetTypeFromRoot(syntax.Name.GetName());
+        if (type is null)
+        {
+            throw new InvalidDataException();
+        }
+
+        throw new NotImplementedException();
     }
 }

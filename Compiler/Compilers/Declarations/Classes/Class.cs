@@ -4,6 +4,7 @@
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace General.Shaders
@@ -11,6 +12,8 @@ namespace General.Shaders
     internal class Class : DeclarationContainer
     {
         private ClassDeclarationSyntax mSyntax;
+
+        public Type Type => Extension.GetType(mSyntax.GetFullName()) ?? throw new InvalidDataException();
 
         public Class(ClassDeclarationSyntax syntax) : base(syntax.Identifier.Text, syntax.GetFullName())  
         {
@@ -36,7 +39,6 @@ namespace General.Shaders
 
         public Class? GetClass(ClassDeclarationSyntax syntax, bool createIfNotExist)
         {
-
             Declaration? instance = this.GetDeclaration(syntax.GetName());
             if (instance is null && createIfNotExist)
             {
@@ -54,6 +56,19 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
+            compiler.PushSyntax(syntax);
+
+            // analyze properties and fields first, they will be used in base list analysis
+            this.analyzePropertiesAndFields(compiler, syntax);
+            this.analyzeBaseList(compiler, syntax);
+
+            base.internalAnalyze(compiler);
+
+            compiler.PopSyntax(syntax);
+        }
+
+        private void analyzeBaseList(Compiler compiler, ClassDeclarationSyntax syntax)
+        {
             BaseListSyntax? baseList = syntax.BaseList;
             if (baseList is null)
             {
@@ -90,8 +105,35 @@ namespace General.Shaders
             {
                 throw new NotImplementedException();
             }
+        }
 
-            base.internalAnalyze(compiler);
+        private void analyzePropertiesAndFields(Compiler compiler, ClassDeclarationSyntax syntax)
+        {
+            foreach (MemberDeclarationSyntax memberSyntax in syntax.Members)
+            {
+                MethodDeclarationSyntax? methodDeclarationSyntax = memberSyntax as MethodDeclarationSyntax;
+                if (methodDeclarationSyntax is not null)
+                {
+                    continue;
+                }
+
+                PropertyDeclarationSyntax? propertyDeclarationSyntax = memberSyntax as PropertyDeclarationSyntax;
+                if (propertyDeclarationSyntax is not null)
+                {
+                    compiler.PushVariable(new Variable(propertyDeclarationSyntax));
+                    continue;
+                }
+
+                FieldDeclarationSyntax? fieldDeclarationSyntax = memberSyntax as FieldDeclarationSyntax;
+                if (fieldDeclarationSyntax is not null)
+                {
+                    compiler.PushVariable(new Variable(fieldDeclarationSyntax));
+                    continue;
+                }
+
+                Debugger.Break();
+                throw new NotImplementedException();
+            }
         }
 
         private void addMethod(Method method, Compiler compiler)

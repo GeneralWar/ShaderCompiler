@@ -6,11 +6,11 @@ namespace General.Shaders
 {
     public interface IVertexSource
     {
-        void OnVertex(InputVertex input, UniformData uniforms, OutputVertex output);
+        void OnVertex(InputVertex input, OutputVertex output);
     }
 
     public interface IFragmentSource
     {
-        void OnFragment(InputFragment input, UniformData uniforms, OutputFragment output);
+        void OnFragment(InputFragment input, OutputFragment output);
     }
 }

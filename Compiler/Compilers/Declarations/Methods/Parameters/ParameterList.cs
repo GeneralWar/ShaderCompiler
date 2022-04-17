@@ -34,7 +34,7 @@ namespace General.Shaders
                 }
 
                 Variable parameter = new Variable(parameterSyntax);
-                mParameters.Add(parameter.Name, parameter);
+                mParameters.TryAdd(parameter.Name, parameter);
             }
         }
 

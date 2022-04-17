@@ -2,6 +2,7 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using General.Shaders.Uniforms;
 using System;
 
 namespace General.Shaders
