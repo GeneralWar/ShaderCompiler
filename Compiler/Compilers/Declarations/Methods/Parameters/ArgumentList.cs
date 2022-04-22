@@ -16,17 +16,16 @@ namespace General.Shaders
     {
         private ArgumentListSyntax mSyntax;
 
-        private List<string> mArguments = new List<string>();
-        public IEnumerable<string> Arguments => mArguments;
-
         public ArgumentList(ArgumentListSyntax syntax) : base("")
         {
             mSyntax = syntax;
         }
 
-        protected override void internalAnalyze(Compiler compiler)
+        protected override void internalAnalyze() { }
+
+        public List<string> Compile(Compiler compiler)
         {
-            mArguments.AddRange(AnalyzeArgumentList(compiler, mSyntax));
+            return CompileArgumentList(compiler, mSyntax);
         }
     }
 }

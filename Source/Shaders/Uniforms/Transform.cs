@@ -8,6 +8,6 @@ namespace General.Shaders.Uniforms
     [TypeName(Language.GLSL, nameof(Transform))]
     public class Transform
     {
-        [UniformField(typeof(Transform))] public Matrix4 matrix { get; }
+        [UniformField(typeof(Transform), 0)] public Matrix4 matrix { get; }
     }
 }

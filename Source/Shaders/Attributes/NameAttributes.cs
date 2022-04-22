@@ -11,6 +11,7 @@ namespace General.Shaders
     {
         public Language Language { get; set; }
         public string Name { get; set; }
+        public string? DefaultConstructor { get; set; }
 
         public TypeNameAttribute(Language language, string name)
         {

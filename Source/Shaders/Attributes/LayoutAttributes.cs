@@ -15,4 +15,7 @@ namespace General.Shaders
             this.Index = index;
         }
     }
+
+    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false)]
+    public class LayoutPushConstantAttribute : Attribute { }
 }

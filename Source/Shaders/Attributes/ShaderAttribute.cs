@@ -6,47 +6,41 @@ using System;
 
 namespace General.Shaders
 {
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class VertexShaderAttribute : Attribute
+    public abstract class ShaderPathAttribute : Attribute
     {
         public string Path { get; set; }
 
-        public VertexShaderAttribute(string path)
+        public ShaderPathAttribute(string path)
         {
             this.Path = path;
         }
     }
 
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class FragmentShaderAttribute : Attribute
+    public class VertexShaderAttribute : ShaderPathAttribute
     {
-        public string Path { get; set; }
 
-        public FragmentShaderAttribute(string path)
-        {
-            this.Path = path;
-        }
+        public VertexShaderAttribute(string path) : base(path) { }
     }
 
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class GraphicsShaderAttribute : Attribute
+    public class FragmentShaderAttribute : ShaderPathAttribute
     {
-        public string Path { get; set; }
+        public FragmentShaderAttribute(string path) : base(path) { }
+    }
+
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    public class GraphicsShaderAttribute : ShaderPathAttribute
+    {
         public int Queue { get; set; }
         public RenderType Type { get; set; }
 
-        public GraphicsShaderAttribute(string path, RenderType type, int queue)
+        public GraphicsShaderAttribute(string path, RenderType type, int queue) : base(path)
         {
-            this.Path = path;
             this.Type = type;
             this.Queue = queue;
         }
 
-        public GraphicsShaderAttribute(string path, RenderType type, RenderQueue queue)
-        {
-            this.Path = path;
-            this.Type = type;
-            this.Queue = (int)queue;
-        }
+        public GraphicsShaderAttribute(string path, RenderType type, RenderQueue queue) : this(path, type, (int)queue) { }
     }
 }

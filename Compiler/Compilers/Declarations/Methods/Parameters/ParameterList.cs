@@ -12,19 +12,19 @@ using System.Reflection;
 
 namespace General.Shaders
 {
-    internal class ParameterList : Declaration
+    internal class ParameterList : Declaration, IVariableCollection
     {
         private ParameterListSyntax mSyntax;
 
         private Dictionary<string, Variable> mParameters = new Dictionary<string, Variable>();
-        public IEnumerable<Variable> Parametes => mParameters.Values;
+        public IEnumerable<Variable> Parameters => mParameters.Values;
 
         public ParameterList(ParameterListSyntax syntax) : base("")
         {
             mSyntax = syntax;
         }
 
-        protected override void internalAnalyze(Compiler compiler)
+        protected override void internalAnalyze()
         {
             foreach (ParameterSyntax parameterSyntax in mSyntax.Parameters)
             {
@@ -57,5 +57,14 @@ namespace General.Shaders
 
             return parameter.Type;
         }
+
+        Variable? IVariableCollection.GetVariable(string name)
+        {
+            Variable? parameter;
+            mParameters.TryGetValue(name, out parameter);
+            return parameter;
+        }
+
+        void IVariableCollection.PushVariable(Variable variable) => throw new InvalidOperationException("Should never push local variable to a parameter list");
     }
 }

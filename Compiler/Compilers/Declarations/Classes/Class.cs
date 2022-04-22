@@ -2,27 +2,41 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 namespace General.Shaders
 {
-    internal class Class : DeclarationContainer
+    internal class Class : DeclarationContainer, IVariableCollection, ISyntaxHost, IMethodProvider, IReferenceHost
     {
         private ClassDeclarationSyntax mSyntax;
+        public ClassDeclarationSyntax Syntax => mSyntax;
+        SyntaxNode ISyntaxHost.SyntaxNode => mSyntax;
 
         public Type Type => Extension.GetType(mSyntax.GetFullName()) ?? throw new InvalidDataException();
 
-        public Class(ClassDeclarationSyntax syntax) : base(syntax.Identifier.Text, syntax.GetFullName())  
+        private HashSet<Declaration> mReferences = new HashSet<Declaration>();
+        HashSet<Declaration> IReferenceHost.References => mReferences;
+        public HashSet<Declaration> References => mReferences;
+
+        public Class(ClassDeclarationSyntax syntax) : base(syntax.Identifier.Text, syntax.GetFullName())
         {
             mSyntax = syntax;
         }
 
+        protected override SyntaxNode? GetChildSyntax(string name)
+        {
+            return mSyntax.ChildNodes().FirstOrDefault(s => s.GetName() == name);
+        }
+
         protected override void checkDeclarationCanAdd(Declaration declaration)
         {
-            if (declaration is Class || declaration is Method)
+            if (declaration is Class || declaration is Method || declaration is Variable)
             {
                 return;
             }
@@ -30,7 +44,9 @@ namespace General.Shaders
             throw new InvalidDataException();
         }
 
-        public Class RegisterClass(ClassDeclarationSyntax syntax)
+        public override Namespace RegisterNamespace(NamespaceDeclarationSyntax syntax) => throw new InvalidOperationException($"{this.GetType()} cannot declare member of type {syntax.GetType()}");
+
+        public override Class RegisterClass(ClassDeclarationSyntax syntax)
         {
             Class instance = new Class(syntax);
             this.AddDeclaration(instance);
@@ -48,7 +64,19 @@ namespace General.Shaders
             return instance as Class;
         }
 
-        protected override void internalAnalyze(Compiler compiler)
+        Variable? IVariableCollection.GetVariable(string name)
+        {
+            return this.GetDeclaration(name) as Variable;
+        }
+
+        void IVariableCollection.PushVariable(Variable variable) => throw new InvalidOperationException("Should never push local variable to a class");
+
+        Method? IMethodProvider.GetMethod(string name)
+        {
+            return this.GetDeclaration(name) as Method;
+        }
+
+        protected override void internalAnalyze()
         {
             ClassDeclarationSyntax? syntax = mSyntax as ClassDeclarationSyntax;
             if (syntax is null)
@@ -56,18 +84,14 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            compiler.PushSyntax(syntax);
-
             // analyze properties and fields first, they will be used in base list analysis
-            this.analyzePropertiesAndFields(compiler, syntax);
-            this.analyzeBaseList(compiler, syntax);
+            this.analyzeMembers(syntax);
+            this.analyzeBaseList(syntax);
 
-            base.internalAnalyze(compiler);
-
-            compiler.PopSyntax(syntax);
+            base.internalAnalyze();
         }
 
-        private void analyzeBaseList(Compiler compiler, ClassDeclarationSyntax syntax)
+        private void analyzeBaseList(ClassDeclarationSyntax syntax)
         {
             BaseListSyntax? baseList = syntax.BaseList;
             if (baseList is null)
@@ -80,7 +104,8 @@ namespace General.Shaders
                 MethodDeclarationSyntax? onVertexMethodSyntax = syntax.Members.Find<MethodDeclarationSyntax>(nameof(IVertexSource.OnVertex));
                 if (onVertexMethodSyntax is not null)
                 {
-                    this.analyzeVertexShader(onVertexMethodSyntax, compiler);
+                    // analyzed in members
+                    //this.analyzeVertexShader(onVertexMethodSyntax);
                     return;
                 }
 
@@ -91,7 +116,8 @@ namespace General.Shaders
                 MethodDeclarationSyntax? onFragmentMethodSyntax = syntax.Members.Find<MethodDeclarationSyntax>(nameof(IFragmentSource.OnFragment));
                 if (onFragmentMethodSyntax is not null)
                 {
-                    this.analyzeFragmentShader(onFragmentMethodSyntax, compiler);
+                    // analyzed in members
+                    //this.analyzeFragmentShader(onFragmentMethodSyntax);
                     return;
                 }
 
@@ -107,27 +133,39 @@ namespace General.Shaders
             }
         }
 
-        private void analyzePropertiesAndFields(Compiler compiler, ClassDeclarationSyntax syntax)
+        private void analyzeMembers(ClassDeclarationSyntax syntax)
         {
             foreach (MemberDeclarationSyntax memberSyntax in syntax.Members)
             {
                 MethodDeclarationSyntax? methodDeclarationSyntax = memberSyntax as MethodDeclarationSyntax;
                 if (methodDeclarationSyntax is not null)
                 {
+                    if (methodDeclarationSyntax.CompareName(nameof(IVertexSource.OnVertex)))
+                    {
+                        this.addMethod(new VertexShaderMethod(methodDeclarationSyntax));
+                    }
+                    else if (methodDeclarationSyntax.CompareName(nameof(IFragmentSource.OnFragment)))
+                    {
+                        this.addMethod(new FragmentShaderMethod(methodDeclarationSyntax));
+                    }
+                    else
+                    {
+                        this.addMethod(new Method(methodDeclarationSyntax));
+                    }
                     continue;
                 }
 
                 PropertyDeclarationSyntax? propertyDeclarationSyntax = memberSyntax as PropertyDeclarationSyntax;
                 if (propertyDeclarationSyntax is not null)
                 {
-                    compiler.PushVariable(new Variable(propertyDeclarationSyntax));
+                    this.AddDeclaration(new Variable(propertyDeclarationSyntax));
                     continue;
                 }
 
                 FieldDeclarationSyntax? fieldDeclarationSyntax = memberSyntax as FieldDeclarationSyntax;
                 if (fieldDeclarationSyntax is not null)
                 {
-                    compiler.PushVariable(new Variable(fieldDeclarationSyntax));
+                    this.AddDeclaration(new Variable(fieldDeclarationSyntax));
                     continue;
                 }
 
@@ -136,20 +174,31 @@ namespace General.Shaders
             }
         }
 
-        private void addMethod(Method method, Compiler compiler)
+        private void addMethod(Method method)
         {
             this.addDeclarationDirectly(method);
-            method.Analyze(compiler);
         }
 
-        private void analyzeVertexShader(MethodDeclarationSyntax syntax, Compiler compiler)
+        private void analyzeVertexShader(MethodDeclarationSyntax syntax)
         {
-            this.addMethod(new VertexShaderMethod(syntax), compiler);
+            this.addMethod(new VertexShaderMethod(syntax));
         }
 
-        private void analyzeFragmentShader(MethodDeclarationSyntax syntax, Compiler compiler)
+        private void analyzeFragmentShader(MethodDeclarationSyntax syntax)
         {
-            this.addMethod(new FragmentShaderMethod(syntax), compiler);
+            this.addMethod(new FragmentShaderMethod(syntax));
+        }
+
+        public override Method RegisterMethod(MethodDeclarationSyntax syntax)
+        {
+            Method method = new Method(syntax);
+            this.addMethod(method);
+            return method;
+        }
+
+        void IReferenceHost.AppendReference(Declaration reference)
+        {
+            mReferences.Add(reference);
         }
     }
 }

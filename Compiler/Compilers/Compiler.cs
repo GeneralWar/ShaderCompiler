@@ -22,14 +22,17 @@ namespace General.Shaders
         private string mOutputDirectory;
         public string OutputDirectory => mOutputDirectory;
 
-        private Namespace mGlobal = new Namespace("global");
-        internal Namespace Global => mGlobal;
+        private Stack<Declaration> mScopeStack = new Stack<Declaration>();
 
-        private Stack<SyntaxNode> mSyntaxStack = new Stack<SyntaxNode>();
-        private Dictionary<SyntaxNode, List<Variable>> mVariableStack = new Dictionary<SyntaxNode, List<Variable>>();
+        internal IVariableCollection CurrentVariableCollection => mScopeStack.FirstOrDefault(s => s is IVariableCollection) as IVariableCollection ?? throw new InvalidOperationException("Should always have more than one variable collection");
+        internal IReferenceHost CurrentReferenceHost => mScopeStack.FirstOrDefault(s => s is IReferenceHost) as IReferenceHost ?? throw new InvalidOperationException("Should always have more than one reference host");
 
         private Dictionary<Type, string> mVertexShaderPathMap = new Dictionary<Type, string>();
         private Dictionary<Type, string> mFragmentShaderPathMap = new Dictionary<Type, string>();
+
+        internal Namespace? Global { get; private set; }
+
+        public int TabCount { get; private set; }
 
         public Compiler(Language language)
         {
@@ -42,79 +45,9 @@ namespace General.Shaders
             mOutputDirectory = path;
         }
 
-        private void Initialize(string projectPath)
-        {
-            if (!File.Exists(projectPath))
-            {
-                throw new FileNotFoundException(projectPath);
-            }
+        public void IncreaseTabCount() => ++this.TabCount;
 
-            string? directory = Path.GetDirectoryName(projectPath);
-            if (string.IsNullOrWhiteSpace(directory))
-            {
-                throw new DirectoryNotFoundException(projectPath);
-            }
-
-            List<string> decocatedFilenames = new List<string>();
-            foreach (string filename in Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories))
-            {
-                this.analyzeFile(filename);
-            }
-        }
-
-        private void analyzeFile(string filename)
-        {
-            SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(File.ReadAllText(filename));
-            this.analyzeNode(syntaxTree.GetRoot());
-        }
-
-        private void analyzeNode(SyntaxNode root)
-        {
-            foreach (SyntaxNode node in root.ChildNodes())
-            {
-                NamespaceDeclarationSyntax? namespaceDeclaration = node as NamespaceDeclarationSyntax;
-                if (namespaceDeclaration is not null)
-                {
-                    this.analyzeNamespaceDeclaration(namespaceDeclaration);
-                    continue;
-                }
-
-                ClassDeclarationSyntax? classDeclarationSyntax = node as ClassDeclarationSyntax;
-                if (classDeclarationSyntax is not null)
-                {
-                    this.analyzeClassDeclaration(classDeclarationSyntax);
-                    continue;
-                }
-            }
-        }
-
-        private void analyzeNamespaceDeclaration(NamespaceDeclarationSyntax syntax)
-        {
-            Namespace? instance = mGlobal.GetNamespace(syntax, true);
-            if (instance is null)
-            {
-                throw new InvalidDataException();
-            }
-        }
-
-        private void analyzeClassDeclaration(ClassDeclarationSyntax syntax)
-        {
-            Class? instance = this.registerClass(syntax);
-            if (instance is null)
-            {
-                throw new InvalidDataException();
-            }
-        }
-
-        private Class? registerClass(ClassDeclarationSyntax syntax)
-        {
-            return mGlobal.GetClass(syntax, true);
-        }
-
-        private void Analyze()
-        {
-            mGlobal.Analyze(this);
-        }
+        public void DecreaseTabCount() => --this.TabCount;
 
         internal string AnalyzeMemberName(Type type, string name)
         {
@@ -197,102 +130,72 @@ namespace General.Shaders
 
         protected abstract string internalAnalyzeElementAccess(string variableName, string elementName);
 
-        internal ClassDeclarationSyntax? GetCurrentClass()
-        {
-            foreach (SyntaxNode syntax in mVariableStack.Keys.Reverse())
-            {
-                ClassDeclarationSyntax? classSyntax = syntax as ClassDeclarationSyntax;
-                if (classSyntax is not null)
-                {
-                    return classSyntax;
-                }
-            }
-            return null;
-        }
-
         internal Variable? GetVariable(string name)
         {
             Trace.Assert(!name.Contains('.'));
 
-            foreach (List<Variable> variables in mVariableStack.Values.Reverse())
+            foreach (Declaration scope in mScopeStack)
             {
-                Variable? v = variables.FirstOrDefault(v => v.Name == name);
-                if (v is not null)
+                Variable? variable = (scope as IVariableCollection)?.GetVariable(name);
+                if (variable is not null)
                 {
-                    return v;
+                    return variable;
                 }
             }
             return null;
         }
 
-        /// <summary>
-        /// Push syntax as current variables host
-        /// </summary>
-        /// <param name="syntax">scope like class, method, loop</param>
-        public void PushSyntax(SyntaxNode syntax)
+        internal string AnalyzeVariableName(Variable variable) => this.internalAnalyzeVariableName(variable);
+
+        protected abstract string internalAnalyzeVariableName(Variable variable);
+
+        internal Method? GetMethod(string name)
         {
-            mSyntaxStack.Push(syntax);
+            foreach (Declaration scope in mScopeStack)
+            {
+                Method? method = (scope as IMethodProvider)?.GetMethod(name);
+                if (method is not null)
+                {
+                    return method;
+                }
+            }
+            return null;
         }
 
-        public void PopSyntax(SyntaxNode syntax)
+        internal void PushScope(Declaration scope)
         {
-            if (mSyntaxStack.Peek() != syntax)
-            {
-                throw new InvalidDataException();
-            }
-
-            mVariableStack.Remove(syntax);
-            mSyntaxStack.Pop();
+            mScopeStack.Push(scope);
         }
 
-        internal void PushVariable(Variable variable)
+        internal T? GetCurrent<T>() where T : Declaration
         {
-            SyntaxNode? currentSyntaxNode;
-            if (!mSyntaxStack.TryPeek(out currentSyntaxNode))
-            {
-                throw new InvalidDataException();
-            }
-
-            List<Variable>? variableList;
-            if (!mVariableStack.TryGetValue(currentSyntaxNode, out variableList))
-            {
-                mVariableStack.Add(currentSyntaxNode, variableList = new List<Variable>());
-            }
-
-            variableList.Add(variable);
+            return mScopeStack.FirstOrDefault(c => c is T) as T;
         }
 
-        internal void PushVariables(IEnumerable<Variable> variables)
+        internal void PopScope(Declaration scope)
         {
-            SyntaxNode? currentSyntaxNode;
-            if (!mSyntaxStack.TryPeek(out currentSyntaxNode))
+            if (mScopeStack.Peek() != scope)
             {
-                throw new InvalidDataException();
+                throw new InvalidOperationException();
             }
 
-            List<Variable>? variableList;
-            if (!mVariableStack.TryGetValue(currentSyntaxNode, out variableList))
-            {
-                mVariableStack.Add(currentSyntaxNode, variableList = new List<Variable>());
-            }
-
-            variableList.AddRange(variables);
+            mScopeStack.Pop();
         }
 
-        public Type? GetType(string name)
+        public Type? GetType(string typeName)
         {
-            foreach (SyntaxNode syntax in mSyntaxStack.Reverse())
+            if ("void" == typeName)
             {
-                Type? type = syntax.GetTypeFromRoot(name);
+                return typeof(void);
+            }
+
+            ISyntaxHost? host = mScopeStack.FirstOrDefault(c => c is ISyntaxHost) as ISyntaxHost;
+            if (host is not null)
+            {
+                Type? type = host.SyntaxNode.GetTypeFromRoot(typeName);
                 if (type is not null)
                 {
                     return type;
-                }
-
-                ClassDeclarationSyntax? classDeclarationSyntax = syntax as ClassDeclarationSyntax;
-                if (classDeclarationSyntax is not null && classDeclarationSyntax.GetName() == name)
-                {
-                    return new DeclaredType(classDeclarationSyntax);
                 }
             }
 
@@ -320,8 +223,10 @@ namespace General.Shaders
             return path;
         }
 
-        public void Compile(Assembly assembly)
+        internal void Compile(Assembly assembly, Namespace global)
         {
+            this.Global = global;
+
             HashSet<Type> vertexShaders = new HashSet<Type>();
             HashSet<Type> fragmentShaders = new HashSet<Type>();
             HashSet<Type> graphicsShaders = new HashSet<Type>();
@@ -384,7 +289,7 @@ namespace General.Shaders
             {
                 throw new InvalidDataException();
             }
-                        
+
             string filename = this.internalCompileFragmentShader(type, attribute);
             mFragmentShaderPathMap.Add(type, filename);
         }

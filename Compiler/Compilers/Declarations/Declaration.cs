@@ -4,12 +4,14 @@
 
 namespace General.Shaders
 {
-    internal abstract partial class Declaration
+    public abstract partial class Declaration
     {
         public string Name { get; private set; }
         public string FullName { get; private set; }
-        
+
         protected Declaration? Parent { get; private set; }
+
+        private AnalyzeStatus mAnalyzeStatus = AnalyzeStatus.Initialized;
 
         public Declaration(string name) : this(name, name) { }
 
@@ -24,12 +26,17 @@ namespace General.Shaders
             this.Parent = parent;
         }
 
-        public void Analyze(Compiler compiler)
+        public void Analyze()
         {
-            this.internalAnalyze(compiler);
+            if (AnalyzeStatus.Initialized == mAnalyzeStatus)
+            {
+                mAnalyzeStatus = AnalyzeStatus.Analyzing;
+                this.internalAnalyze();
+                mAnalyzeStatus = AnalyzeStatus.Analyzed;
+            }
         }
 
-        protected abstract void internalAnalyze(Compiler compiler);
+        protected abstract void internalAnalyze();
 
         public override string ToString()
         {

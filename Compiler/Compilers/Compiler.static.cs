@@ -2,7 +2,10 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
@@ -28,9 +31,32 @@ namespace General.Shaders
 
             Compiler compiler = Create(language);
             compiler.SetOutputDirectory(outputDirectory);
-            compiler.Initialize(Path.GetFullPath(projectPath));
-            compiler.Analyze();
-            compiler.Compile(assembly);
+            Namespace global = Initialize(Path.GetFullPath(projectPath));
+            compiler.Compile(assembly, global);
+        }
+
+        static private Namespace Initialize(string projectPath)
+        {
+            if (!File.Exists(projectPath))
+            {
+                throw new FileNotFoundException(projectPath);
+            }
+
+            string? directory = Path.GetDirectoryName(projectPath);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                throw new DirectoryNotFoundException(projectPath);
+            }
+
+            Namespace global = new Namespace("global");
+            List<string> decocatedFilenames = new List<string>();
+            foreach (string filename in Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories))
+            {
+                SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(File.ReadAllText(filename));
+                global.Analyze(syntaxTree.GetRoot());
+                decocatedFilenames.Add(filename);
+            }
+            return global;
         }
     }
 }

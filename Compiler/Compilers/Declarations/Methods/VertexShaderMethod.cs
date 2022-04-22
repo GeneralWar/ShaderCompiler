@@ -8,6 +8,8 @@ namespace General.Shaders
 {
     internal class VertexShaderMethod : Method
     {
+        public override bool IsMain => true;
+
         public VertexShaderMethod(MethodDeclarationSyntax syntax) : base(syntax) { }
     }
 }

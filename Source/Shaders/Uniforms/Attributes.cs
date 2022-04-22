@@ -23,14 +23,17 @@ namespace General.Shaders
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
     public class UniformFieldAttribute : Attribute
     {
+        public int Index { get; set; }
+
         /// <summary>
         /// Type which is declaring this field
         /// </summary>
         /// <value></value>
         public Type DeclaringType { get; set; }
 
-        public UniformFieldAttribute(Type declaringType)
+        public UniformFieldAttribute(Type declaringType, int index)
         {
+            this.Index = index;
             this.DeclaringType = declaringType;
         }
     }

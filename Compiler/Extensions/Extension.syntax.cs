@@ -21,6 +21,23 @@ static public partial class Extension
         throw new NotImplementedException();
     }
 
+    static public string GetName(this SyntaxNode syntax)
+    {
+        ExpressionSyntax? expressionSyntax = syntax as ExpressionSyntax;
+        if (expressionSyntax is not null)
+        {
+            return GetName(expressionSyntax);
+        }
+
+        MethodDeclarationSyntax? methodDeclarationSyntax = syntax as MethodDeclarationSyntax;
+        if (methodDeclarationSyntax is not null)
+        {
+            return GetName(methodDeclarationSyntax);
+        }
+
+        throw new NotImplementedException();
+    }
+
     static public string GetName(this ExpressionSyntax syntax)
     {
         TypeSyntax? typeSyntax = syntax as TypeSyntax;
@@ -52,6 +69,19 @@ static public partial class Extension
         {
             return identifierNameSyntax.GetName();
         }
+
+        ArrayTypeSyntax? arrayTypeSyntax = syntax as ArrayTypeSyntax;
+        if (arrayTypeSyntax is not null)
+        {
+            return arrayTypeSyntax.ElementType.GetName() + "[]";
+        }
+
+        PredefinedTypeSyntax? predefinedTypeSyntax = syntax as PredefinedTypeSyntax;
+        if (predefinedTypeSyntax is not null)
+        {
+            return predefinedTypeSyntax.Keyword.ValueText;
+        }
+
         Debugger.Break();
         throw new NotImplementedException();
     }
@@ -104,6 +134,11 @@ static public partial class Extension
             return name;
         }
         return namespaceSyntax.Name.GetFullName().Trim() + "." + name;
+    }
+
+    static public string GetName(this MethodDeclarationSyntax syntax)
+    {
+        return syntax.Identifier.ValueText;
     }
 
     static public string GetFullName(this MethodDeclarationSyntax syntax)

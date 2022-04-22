@@ -2,8 +2,12 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace General.Shaders
 {
@@ -14,6 +18,33 @@ namespace General.Shaders
         public DeclarationContainer(string name) : base(name) { }
 
         public DeclarationContainer(string name, string fullName) : base(name, fullName) { }
+
+        public Declaration RegisterMember(SyntaxNode syntax)
+        {
+            NamespaceDeclarationSyntax? namespaceDeclarationSyntax = syntax as NamespaceDeclarationSyntax;
+            if (namespaceDeclarationSyntax is not null)
+            {
+                return this.RegisterNamespace(namespaceDeclarationSyntax);
+            }
+
+            ClassDeclarationSyntax? classDeclarationSyntax = syntax as ClassDeclarationSyntax;
+            if (classDeclarationSyntax is not null)
+            {
+                return this.RegisterClass(classDeclarationSyntax);
+            }
+
+            MethodDeclarationSyntax? methodDeclarationSyntax = syntax as MethodDeclarationSyntax;
+            if (methodDeclarationSyntax is not null)
+            {
+                return this.RegisterMethod(methodDeclarationSyntax);
+            }
+
+            throw new NotImplementedException();
+        }
+
+        public abstract Namespace RegisterNamespace(NamespaceDeclarationSyntax syntax);
+        public abstract Class RegisterClass(ClassDeclarationSyntax syntax);
+        public abstract Method RegisterMethod(MethodDeclarationSyntax syntax);
 
         public Declaration? GetDeclaration(string name)
         {
@@ -31,12 +62,11 @@ namespace General.Shaders
             }
 
             Declaration? child;
-            if (!mChildren.TryGetValue(name, out child))
-            {
-                return null;
-            }
+            mChildren.TryGetValue(name, out child);
             return child;
         }
+
+        protected abstract SyntaxNode? GetChildSyntax(string name);
 
         protected abstract void checkDeclarationCanAdd(Declaration declaration);
 
@@ -44,6 +74,7 @@ namespace General.Shaders
         {
             mChildren.Add(declaration.Name, declaration);
             declaration.SetParent(this);
+            declaration.Analyze();
         }
 
         protected void AddDeclaration(Declaration declaration)
@@ -73,11 +104,11 @@ namespace General.Shaders
             this.addDeclarationDirectly(declaration);
         }
 
-        protected override void internalAnalyze(Compiler compiler)
+        protected override void internalAnalyze()
         {
-            foreach (Declaration child in mChildren.Values)
+            foreach (Declaration child in mChildren.Values.ToArray())
             {
-                child.Analyze(compiler);
+                child.Analyze();
             }
         }
     }

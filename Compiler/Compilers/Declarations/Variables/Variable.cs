@@ -5,17 +5,13 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace General.Shaders
 {
-    class Variable : Declaration
+    public class Variable : Declaration
     {
         private SyntaxNode? mSyntax = null;
 
@@ -51,9 +47,9 @@ namespace General.Shaders
             mTypeString = mType.FullName ?? mType.Name;
         }
 
-        protected override void internalAnalyze(Compiler compiler)
+        protected override void internalAnalyze()
         {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
         private Type analyzeType(PropertyDeclarationSyntax syntax)
@@ -106,10 +102,15 @@ namespace General.Shaders
 
         public string AnalyzeMemberAccess(Compiler compiler, string name)
         {
-            MemberInfo[] members = mType.GetMember(name);
-            Trace.Assert(1 == members.Length);
+            if (typeof(InputVertex) == this.Type || typeof(OutputVertex) == this.Type || typeof(InputFragment) == this.Type || typeof(OutputFragment) == this.Type)
+            {
+                MemberInfo[] members = mType.GetMember(name);
+                Trace.Assert(1 == members.Length);
 
-            return compiler.AnalyzeMemberName(members[0]);
+                return compiler.AnalyzeMemberName(members[0]);
+            }
+            
+            return $"{compiler.AnalyzeVariableName(this)}.{name}";
         }
 
         public override string ToString()

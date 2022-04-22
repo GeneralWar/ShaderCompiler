@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 namespace General.Shaders
 {
     [MemberCollector]
-    [TypeName(Language.GLSL, "vec2")]
+    [TypeName(Language.GLSL, "vec2", DefaultConstructor = "vec2(0)")]
     public struct Vector2
     {
         public float x { get; set; }
@@ -16,7 +16,7 @@ namespace General.Shaders
     }
 
     [MemberCollector]
-    [TypeName(Language.GLSL, "vec3")]
+    [TypeName(Language.GLSL, "vec3", DefaultConstructor = "vec3(0)")]
     public struct Vector3
     {
         public float x { get; set; }
@@ -25,7 +25,7 @@ namespace General.Shaders
     }
 
     [MemberCollector]
-    [TypeName(Language.GLSL, "vec4")]
+    [TypeName(Language.GLSL, "vec4", DefaultConstructor = "vec4(0)")]
     [StructLayout(LayoutKind.Explicit)]
     public struct Vector4
     {
@@ -43,6 +43,7 @@ namespace General.Shaders
 
         public Vector4 this[string key] { get { throw new NotImplementedException(); } set { throw new NotImplementedException(); } }
 
+        static public Vector4 operator +(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
         static public Vector4 operator *(Matrix4 matrix, Vector4 v) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v, float n) { throw new NotImplementedException(); }

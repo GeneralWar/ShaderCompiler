@@ -81,6 +81,16 @@ static public partial class Extension
 
     static public string GetShaderTypeName(this Type type, Language language)
     {
+        if (type.IsPrimitive)
+        {
+            if (typeof(float) == type)
+            {
+                return "float";
+            }
+
+            throw new NotImplementedException();
+        }
+
         IEnumerable<TypeNameAttribute> attributes = type.GetCustomAttributes<TypeNameAttribute>();
         TypeNameAttribute? attribute = attributes.FirstOrDefault(a => a.Language == language);
         if (attribute is null)
@@ -103,16 +113,11 @@ static public partial class Extension
         return attribute.Name;
     }
 
-    static public string GetFunctionName(this MethodInfo info, Language language)
+    static public string? GetFunctionName(this MethodInfo info, Language language)
     {
         IEnumerable<FunctionNameAttribute> attributes = info.GetCustomAttributes<FunctionNameAttribute>();
         FunctionNameAttribute? attribute = attributes.FirstOrDefault(a => a.Language == language);
-        if (attribute is null)
-        {
-            throw new InvalidDataException();
-        }
-
-        return attribute.Name;
+        return attribute?.Name;
     }
 
     static public Type? GetType(string fullTypeName)

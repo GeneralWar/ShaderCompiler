@@ -4,19 +4,62 @@
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace General.Shaders
 {
     internal class Namespace : DeclarationContainer
     {
-        private NamespaceDeclarationSyntax? mSyntax = null;
+        private HashSet<NamespaceDeclarationSyntax> mSyntaxNodes = new HashSet<NamespaceDeclarationSyntax>();
+        private HashSet<NamespaceDeclarationSyntax> mAnalyzedSyntaxNodes = new HashSet<NamespaceDeclarationSyntax>();
 
         public Namespace(string name) : base(name, name) { }
 
         public Namespace(NamespaceDeclarationSyntax syntax) : base(syntax.Name.GetName(), syntax.Name.GetFullName())
         {
-            mSyntax = syntax;
+            this.appendSyntax(syntax);
+        }
+
+        public void Analyze(SyntaxNode root)
+        {
+            foreach (SyntaxNode node in root.ChildNodes())
+            {
+                NamespaceDeclarationSyntax? namespaceDeclaration = node as NamespaceDeclarationSyntax;
+                if (namespaceDeclaration is not null)
+                {
+                    this.analyzeNamespaceDeclaration(namespaceDeclaration);
+                    continue;
+                }
+
+                ClassDeclarationSyntax? classDeclarationSyntax = node as ClassDeclarationSyntax;
+                if (classDeclarationSyntax is not null)
+                {
+                    this.analyzeClassDeclaration(classDeclarationSyntax);
+                    continue;
+                }
+            }
+        }
+
+        protected void appendSyntax(NamespaceDeclarationSyntax syntax)
+        {
+            if (!mAnalyzedSyntaxNodes.Contains(syntax))
+            {
+                this.Analyze(syntax);
+                mAnalyzedSyntaxNodes.Add(syntax);
+            }
+            mSyntaxNodes.Add(syntax);
+        }
+
+        protected override SyntaxNode? GetChildSyntax(string name)
+        {
+            foreach (SyntaxNode syntax in mSyntaxNodes)
+            {
+                return syntax.ChildNodes().FirstOrDefault(s => throw new Exception(s.ToString()));
+            }
+            return null;
         }
 
         protected override void checkDeclarationCanAdd(Declaration declaration)
@@ -29,7 +72,7 @@ namespace General.Shaders
             throw new InvalidDataException();
         }
 
-        public Namespace RegisterNamespace(NamespaceDeclarationSyntax syntax)
+        public override Namespace RegisterNamespace(NamespaceDeclarationSyntax syntax)
         {
             Namespace instance = new Namespace(syntax);
             this.AddDeclaration(instance);
@@ -38,15 +81,22 @@ namespace General.Shaders
 
         public Namespace? GetNamespace(NamespaceDeclarationSyntax syntax, bool createIfNotExist)
         {
-            Declaration? instance = this.GetDeclaration(syntax.Name.GetFullName());
+            Declaration? declaration = this.GetDeclaration(syntax.Name.GetFullName());
+            if (declaration is not null && declaration is not Namespace)
+            {
+                throw new InvalidDataException();
+            }
+
+            Namespace? instance = declaration as Namespace;
             if (instance is null && createIfNotExist)
             {
                 instance = this.RegisterNamespace(syntax);
             }
-            return instance as Namespace;
+            instance?.appendSyntax(syntax);
+            return instance;
         }
 
-        public Class RegisterClass(ClassDeclarationSyntax syntax)
+        public override Class RegisterClass(ClassDeclarationSyntax syntax)
         {
             Class instance = new Class(syntax);
             this.AddDeclaration(instance);
@@ -63,31 +113,7 @@ namespace General.Shaders
             return instance as Class;
         }
 
-        protected override void internalAnalyze(Compiler compiler)
-        {
-            NamespaceDeclarationSyntax? syntax = mSyntax;
-            if (syntax is not null)
-            {
-                foreach (SyntaxNode node in syntax.ChildNodes())
-                {
-                    NamespaceDeclarationSyntax? namespaceDeclaration = node as NamespaceDeclarationSyntax;
-                    if (namespaceDeclaration is not null)
-                    {
-                        this.analyzeNamespaceDeclaration(namespaceDeclaration);
-                        continue;
-                    }
-
-                    ClassDeclarationSyntax? classDeclarationSyntax = node as ClassDeclarationSyntax;
-                    if (classDeclarationSyntax is not null)
-                    {
-                        this.analyzeClassDeclaration(classDeclarationSyntax);
-                        continue;
-                    }
-                }
-            }
-
-            base.internalAnalyze(compiler);
-        }
+        public override Method RegisterMethod(MethodDeclarationSyntax syntax) => throw new InvalidOperationException($"{this.GetType()} cannot declare member of type {syntax.GetType()}");
 
         private void analyzeNamespaceDeclaration(NamespaceDeclarationSyntax syntax)
         {
@@ -96,6 +122,8 @@ namespace General.Shaders
             {
                 throw new InvalidDataException();
             }
+
+            mAnalyzedSyntaxNodes.Add(syntax);
         }
 
         private void analyzeClassDeclaration(ClassDeclarationSyntax syntax)

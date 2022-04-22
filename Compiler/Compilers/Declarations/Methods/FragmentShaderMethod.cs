@@ -8,6 +8,8 @@ namespace General.Shaders
 {
     internal class FragmentShaderMethod : Method
     {
+        public override bool IsMain => true;
+
         public FragmentShaderMethod(MethodDeclarationSyntax syntax) : base(syntax) { }
     }
 }

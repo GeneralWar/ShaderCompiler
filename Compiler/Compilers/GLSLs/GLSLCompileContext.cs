@@ -8,6 +8,11 @@ namespace General.Shaders
 {
     class GLSLCompileContext : CompileContext
     {
+        public List<string> PushConstants = new List<string>();
 
+        public void AddPushConstant(string content)
+        {
+            this.PushConstants.Add(content);
+        }
     }
 }

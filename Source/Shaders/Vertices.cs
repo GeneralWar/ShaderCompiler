@@ -16,6 +16,7 @@ namespace General.Shaders
     {
         [OutputVertex(OutputField.Position)] public Vector4 position { get; set; }
         [LayoutLocation(0)] [OutputVertex(OutputField.Color)] public Vector4 color { get; set; }
-        [LayoutLocation(1)] [OutputVertex(OutputField.UV0)] public Vector2 uv0 { get; set; }
+        [LayoutLocation(1)] [OutputVertex(OutputField.Normal)] public Vector3 normal { get; set; }
+        [LayoutLocation(2)] [OutputVertex(OutputField.UV0)] public Vector2 uv0 { get; set; }
     }
 }
