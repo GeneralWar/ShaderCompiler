@@ -19,6 +19,9 @@ namespace General.Shaders
         private const string OUTPUT_VERTEX_NAME = "outputVertex";
         private const string INPUT_FRAGMENT_NAME = "inputFragment";
 
+        private const string STRUCT_CONTENT_PLACE_HOLDER = "{struct_content_place_holder}";
+        private const string UNIFORM_CONTENT_PLACE_HOLDER = "{uniform_content_place_holder}";
+
         public GLSLCompiler() : base(Language.GLSL) { }
 
         protected override string internalAnalyzeInputVertexMemberName(MemberInfo memberInfo, InputVertexAttribute attribute)
@@ -148,11 +151,8 @@ namespace General.Shaders
             GLSLCompileContext context = new GLSLCompileContext();
             this.PushScope(shaderInstance);
 
-            StringBuilder builder = new StringBuilder();
             string headerContent = this.declareHeader(context, shaderInstance, method);
             string methodContent = this.declareShaderMainMethod(context, shaderInstance, method);
-
-            builder.AppendLine(headerContent);
 
             // should compile references before constants, referenced methods may need constants
             StringBuilder referenceBuilder = new StringBuilder();
@@ -166,6 +166,11 @@ namespace General.Shaders
             {
                 referenceBuilder.AppendLine(referenceContent);
             }
+
+            StringBuilder builder = new StringBuilder();
+            headerContent = headerContent.Replace(STRUCT_CONTENT_PLACE_HOLDER, context.Structures.Length > 0 ? (string.Join(Environment.NewLine, context.Structures) + Environment.NewLine) : "");
+            headerContent = headerContent.Replace(UNIFORM_CONTENT_PLACE_HOLDER, context.Uniforms.Count > 0 ? (string.Join(Environment.NewLine, context.Uniforms) + Environment.NewLine) : "");
+            builder.AppendLine(headerContent);
 
             string constantContent = string.Join(Environment.NewLine, context.PushConstants);
             if (!string.IsNullOrWhiteSpace(constantContent))
@@ -209,8 +214,9 @@ namespace General.Shaders
             }
             builder.AppendLine();
 
-            this.declareUniformData(builder, context, instance.Type);
-            builder.AppendLine();
+            builder.Append(STRUCT_CONTENT_PLACE_HOLDER);
+            builder.Append(UNIFORM_CONTENT_PLACE_HOLDER);
+            this.declareUniforms(context, instance.Type);
 
             foreach (Variable parameter in method.ParameterList.Parameters)
             {
@@ -222,7 +228,7 @@ namespace General.Shaders
             return builder.ToString().TrimEnd() + Environment.NewLine;
         }
 
-        public void declareUniformData(StringBuilder builder, GLSLCompileContext context, Type type)
+        public void declareUniforms(GLSLCompileContext context, Type type)
         {
             foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo))
             {
@@ -231,18 +237,58 @@ namespace General.Shaders
                     continue;
                 }
 
-                Type memberType = memberInfo.GetMemberType();
-                string memberName = memberInfo.Name;
-                string shaderTypeName = memberType.GetShaderTypeName(this.Language);
-                if (string.IsNullOrWhiteSpace(shaderTypeName) || string.IsNullOrWhiteSpace(memberName))
+                this.declareAsUniformData(context, type, memberInfo, memberInfo.Name, memberInfo);
+            }
+        }
+
+        public void declareAsUniformData(GLSLCompileContext context, Type componentType, MemberInfo memberInfo, string instanceName, ICustomAttributeProvider attributeProvider)
+        {
+            Type memberType = memberInfo.GetMemberType();
+            string memberName = memberInfo.Name;
+            if (string.IsNullOrWhiteSpace(memberName))
+            {
+                throw new InvalidDataException();
+            }
+
+            string shaderTypeName = memberType.GetShaderTypeName(this.Language);
+            if (string.IsNullOrWhiteSpace(shaderTypeName))
+            {
+                throw new InvalidDataException();
+            }
+
+            StringBuilder builder = new StringBuilder();
+            if (memberType.IsArray)
+            {
+                ArraySizeAttribute? arraySizeAttribute = attributeProvider.GetCustomAttributes(typeof(ArraySizeAttribute), false).Select(a => a as ArraySizeAttribute).FirstOrDefault();
+                if (arraySizeAttribute is null)
                 {
                     throw new InvalidDataException();
                 }
 
+                Type elementType = memberType.GetElementType() ?? throw new InvalidDataException();
+                this.declareAsStruct(context, elementType, shaderTypeName);
+
+                builder.AppendLine($"layout(binding = {{binding-{memberName}}}) uniform Uniform{shaderTypeName}");
+                builder.AppendLine("{");
+                builder.AppendLine(1, $"{shaderTypeName} {instanceName}[{arraySizeAttribute.ElementCount}];");
+                builder.AppendLine("};");
+                context.AddUniform(builder.ToString());
+            }
+            else
+            {
                 builder.Append($"layout(binding = {{binding-{memberName}}}) uniform {shaderTypeName}");
                 this.declareUniformDataMembers(context, builder, memberType);
-                builder.AppendLine($" {memberName};");
+                builder.AppendLine($" {instanceName};");
+                context.AddUniform(builder.ToString());
             }
+
+            UniformProperty uniform = new UniformProperty(memberType, memberName);
+            UniformNameAttribute? nameAttribute = memberInfo.GetCustomAttribute<UniformNameAttribute>();
+            if (nameAttribute is not null)
+            {
+                uniform.SetPublicName(nameAttribute.Name);
+            }
+            this.getComponentData(componentType).AddUniformProperty(uniform);
         }
 
         private void declareUniformDataMembers(GLSLCompileContext context, StringBuilder builder, Type uniformType)
@@ -253,7 +299,7 @@ namespace General.Shaders
 #pragma warning restore CS8602 // 解引用可能出现空引用。
             if (members.Length > 0)
             {
-                builder.AppendLine();
+                builder.AppendLine(); // append new line here, confirm no broken line if there is no member
                 builder.AppendLine("{");
                 foreach (MemberInfo dataMemberInfo in members)
                 {
@@ -262,6 +308,15 @@ namespace General.Shaders
                 }
                 builder.Append("}");
             }
+        }
+
+        private void declareAsStruct(GLSLCompileContext context, Type type, string shaderTypeName)
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.Append($"struct {shaderTypeName}");
+            this.declareUniformDataMembers(context, builder, type);
+            builder.AppendLine(";");
+            context.AddStruct(builder.ToString());
         }
 
         public string declareUniformMember(GLSLCompileContext context, MemberInfo memberInfo)
@@ -439,8 +494,8 @@ namespace General.Shaders
         private void groupComponents(ShaderConfig shader, Type vertexShaderType, Type fragmentShaderType)
         {
             List<UniformProperty> uniforms = new List<UniformProperty>();
-            uniforms.AddRange(this.groupUniformData(vertexShaderType));
-            uniforms.AddRange(this.groupUniformData(fragmentShaderType));
+            uniforms.AddRange(this.getComponentData(vertexShaderType).Uniforms);
+            uniforms.AddRange(this.getComponentData(fragmentShaderType).Uniforms);
             uniforms = uniforms.Distinct().ToList();
 
             string safeFileName = shader.key.Replace(Path.DirectorySeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_');
@@ -468,31 +523,6 @@ namespace General.Shaders
             string filename = Path.Join(directory, $"{safeFileName}{Path.GetExtension(templatePath)}");
             File.WriteAllText(filename, content);
             return filename;
-        }
-
-        private List<UniformProperty> groupUniformData(Type type)
-        {
-            List<UniformProperty> uniforms = new List<UniformProperty>();
-            foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo))
-            {
-                Type memberType = memberInfo.GetMemberType();
-                if (memberType.GetCustomAttribute<UniformTypeAttribute>() is null)
-                {
-                    continue;
-                }
-
-                string memberName = memberInfo.Name;
-                UniformProperty uniform = new UniformProperty(memberType, memberName);
-
-                UniformNameAttribute? nameAttribute = memberInfo.GetCustomAttribute<UniformNameAttribute>();
-                if (nameAttribute is not null)
-                {
-                    uniform.SetPublicName(nameAttribute.Name);
-                }
-
-                uniforms.Add(uniform);
-            }
-            return uniforms;
         }
 
         private string declareReferences(GLSLCompileContext context, IEnumerable<Declaration> references)
@@ -548,6 +578,15 @@ namespace General.Shaders
                 if (layoutPushConstantAttribute is not null)
                 {
                     this.declarePushConstant(context, parameterInfo);
+                    continue;
+                }
+
+                UniformTypeAttribute? uniformTypeAttribute = parameterInfo.GetCustomAttribute<UniformTypeAttribute>();
+                if (uniformTypeAttribute is not null)
+                {
+                    Type currentClass = this.GetCurrent<Class>()?.Type ?? throw new InvalidOperationException("There must be more than one class");
+                    string parameterName = parameterInfo.Name ?? throw new InvalidDataException("Parameters must have name");
+                    this.declareAsUniformData(context, currentClass, parameterInfo.ParameterType, parameterName, parameterInfo);
                     continue;
                 }
 

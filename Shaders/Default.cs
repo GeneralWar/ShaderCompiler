@@ -15,6 +15,7 @@ namespace Shaders
         void IVertexSource.OnVertex(InputVertex input, OutputVertex output)
         {
             output.position = this.transform.matrix * new Vector4(input.position, 1.0f);
+            output.normal = input.normal;
             output.color = input.color;
             output.uv0 = input.uv0;
         }
@@ -28,7 +29,7 @@ namespace Shaders
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
             output.color = ShaderFunctions.MapTexture(this.diffuse, input.uv0) * input.color;
-            output.color += LightProcessors.ProcessAllLights(input);
+            output.color.rgb = LightProcessors.ProcessAllLights(output.color.rgb, input.normal);
         }
     }
 
@@ -40,8 +41,8 @@ namespace Shaders
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
             Vector4 color = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
-            output.color = new Vector4(color["rgb"] * input.color.a, input.color.a);
-            output.color += LightProcessors.ProcessAllLights(input);
+            output.color = new Vector4(color.rgb * input.color.a, 1.0f);
+            output.color.rgb = LightProcessors.ProcessAllLights(output.color.rgb, input.normal);
         }
     }
 

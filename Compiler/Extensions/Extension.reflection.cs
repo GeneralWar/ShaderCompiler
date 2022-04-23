@@ -45,6 +45,12 @@ static public partial class Extension
             return propertyInfo.PropertyType;
         }
 
+        Type? type = memberInfo as Type;
+        if (type is not null)
+        {
+            return type;
+        }
+
         throw new NotImplementedException();
     }
 
@@ -81,6 +87,11 @@ static public partial class Extension
 
     static public string GetShaderTypeName(this Type type, Language language)
     {
+        if (type.IsArray)
+        {
+            return GetShaderTypeName(type.GetElementType() ?? throw new InvalidDataException("Array must has element type"), language);
+        }
+
         if (type.IsPrimitive)
         {
             if (typeof(float) == type)

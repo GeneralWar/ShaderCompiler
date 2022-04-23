@@ -8,7 +8,13 @@ namespace General.Shaders
 {
     class GLSLCompileContext : CompileContext
     {
+        public List<string> Uniforms = new List<string>();
         public List<string> PushConstants = new List<string>();
+
+        public void AddUniform(string content)
+        {
+            this.Uniforms.Add(content);
+        }
 
         public void AddPushConstant(string content)
         {

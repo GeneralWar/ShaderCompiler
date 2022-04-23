@@ -7,6 +7,8 @@ namespace General.Shaders
     {
         Transform,
         Sampler2D,
+
+        DirectionalLightArray,
     }
 
     [DataContract]

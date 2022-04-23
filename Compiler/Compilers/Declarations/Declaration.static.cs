@@ -135,6 +135,12 @@ namespace General.Shaders
                 return CompileElementAccessExpressionSyntax(compiler, elementAccessExpressionSyntax);
             }
 
+            PrefixUnaryExpressionSyntax? prefixUnaryExpressionSyntax = syntax as PrefixUnaryExpressionSyntax;
+            if (prefixUnaryExpressionSyntax is not null)
+            {
+                return prefixUnaryExpressionSyntax.OperatorToken.ValueText + CompileExpressionSyntax(compiler, prefixUnaryExpressionSyntax.Operand);
+            }
+
             Debugger.Break();
             throw new NotImplementedException();
         }
