@@ -14,8 +14,11 @@ namespace General.Shaders
         public string? VertexShader { get; private set; } = null;
         public string? FragmentShader { get; private set; } = null;
 
-        private List<string> mStructures = new List<string>();
-        public string[] Structures => mStructures.ToArray();
+        private Dictionary<string, string> mStructures = new Dictionary<string, string>();
+        public IEnumerable<string> Structures => mStructures.Values;
+
+        private Dictionary<string, string> mReferences = new Dictionary<string, string>();
+        public IEnumerable<string> References => mReferences.Values;
 
         public void SetInputDeclaration(string input)
         {
@@ -37,9 +40,24 @@ namespace General.Shaders
             this.FragmentShader = fragment;
         }
 
-        public void AddStruct(string structContent)
+        public void AddStruct(string name, string content)
         {
-            mStructures.Add(structContent);
+            if (mStructures.ContainsKey(name))
+            {
+                return;
+            }
+
+            mStructures.Add(name, content);
+        }
+
+        public void AddReference(string name, string content)
+        {
+            if (mReferences.ContainsKey(name))
+            {
+                return;
+            }
+
+            mReferences.Add(name, content);
         }
     }
 }

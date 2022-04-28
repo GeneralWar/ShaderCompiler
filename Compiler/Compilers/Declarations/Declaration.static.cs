@@ -141,6 +141,12 @@ namespace General.Shaders
                 return prefixUnaryExpressionSyntax.OperatorToken.ValueText + CompileExpressionSyntax(compiler, prefixUnaryExpressionSyntax.Operand);
             }
 
+            ParenthesizedExpressionSyntax? parenthesizedExpressionSyntax = syntax as ParenthesizedExpressionSyntax;
+            if (parenthesizedExpressionSyntax is not null)
+            {
+                return parenthesizedExpressionSyntax.OpenParenToken + CompileExpressionSyntax(compiler, parenthesizedExpressionSyntax.Expression) + parenthesizedExpressionSyntax.CloseParenToken;
+            }
+
             Debugger.Break();
             throw new NotImplementedException();
         }
@@ -153,15 +159,10 @@ namespace General.Shaders
                 return CompileMemberAccessExpressionSyntax(compiler, syntax.Expression.GetName(), memberName);
             }
 
-            string prefix = "";
-            if (syntax.Expression is MemberAccessExpressionSyntax)
-            {
-                prefix = CompileMemberAccessExpressionSyntax(compiler, syntax.Expression as MemberAccessExpressionSyntax ?? throw new InvalidDataException()) + syntax.OperatorToken.ValueText;
-            }
-
             MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax.Expression as MemberAccessExpressionSyntax;
             if (memberAccessExpressionSyntax is not null)
             {
+                string prefix = CompileMemberAccessExpressionSyntax(compiler, memberAccessExpressionSyntax) + syntax.OperatorToken.ValueText;
                 Type type = GetMemberType(compiler, memberAccessExpressionSyntax);
                 if (type.GetCustomAttribute<MemberCollectorAttribute>() is not null)
                 {
@@ -215,8 +216,26 @@ namespace General.Shaders
                     throw new InvalidDataException();
                 }
 
-                return classDeclaration.Type.GetMemberType(syntax.Name.GetName()) ?? throw new InvalidDataException();
+                return classDeclaration.Type.GetMemberType(syntax.Name.GetName());
             }
+
+            ElementAccessExpressionSyntax? elementAccessExpressionSyntax = syntax.Expression as ElementAccessExpressionSyntax;
+            if (elementAccessExpressionSyntax is not null)
+            {
+                if (elementAccessExpressionSyntax.ArgumentList is BracketedArgumentListSyntax)
+                {
+                    Variable? variable = compiler.GetVariable(elementAccessExpressionSyntax.Expression.GetName());
+                    if (variable is null || !variable.Type.IsArray)
+                    {
+                        throw new InvalidDataException();
+                    }
+
+                    return (variable.Type.GetElementType() ?? throw new InvalidDataException("Arrays must have element type")).GetMemberType(syntax.Name.GetName());
+                }
+
+                throw new NotImplementedException();
+            }
+
             if (syntax.Expression is IdentifierNameSyntax)
             {
                 Variable? target = compiler.GetVariable(syntax.Expression.GetName());
@@ -263,7 +282,7 @@ namespace General.Shaders
         static protected string CompileMemberAccessExpressionSyntax(Compiler compiler, Type type, string memberName)
         {
             MemberInfo[] members = type.GetMember(memberName);
-            Trace.Assert(1 == members.Length);
+            //Trace.Assert(1 == members.Length); maybe overload
 
             MemberInfo memberInfo = members[0];
             MethodInfo? methodInfo = memberInfo as MethodInfo;

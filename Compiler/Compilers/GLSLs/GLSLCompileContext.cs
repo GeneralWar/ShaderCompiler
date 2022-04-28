@@ -8,17 +8,30 @@ namespace General.Shaders
 {
     class GLSLCompileContext : CompileContext
     {
-        public List<string> Uniforms = new List<string>();
-        public List<string> PushConstants = new List<string>();
+        public Dictionary<string, string> mUniforms = new Dictionary<string, string>();
+        public IEnumerable<string> Uniforms => mUniforms.Values;
 
-        public void AddUniform(string content)
+        public Dictionary<string, string> mPushConstants = new Dictionary<string, string>();
+        public IEnumerable<string> PushConstants => mPushConstants.Values;
+
+        public void AddUniform(string name, string content)
         {
-            this.Uniforms.Add(content);
+            if (mUniforms.ContainsKey(name))
+            {
+                return;
+            }
+
+            mUniforms.Add(name, content);
         }
 
-        public void AddPushConstant(string content)
+        public void AddPushConstant(string name, string content)
         {
-            this.PushConstants.Add(content);
+            if (mPushConstants.ContainsKey(name))
+            {
+                return;
+            }
+
+            mPushConstants.Add(name, content);
         }
     }
 }

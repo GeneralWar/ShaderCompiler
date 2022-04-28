@@ -210,7 +210,7 @@ static public partial class Extension
             throw new InvalidDataException();
         }
 
-        Type? type = root.GetType(name);
+        Type? type = Extension.GetType(name) ?? root.GetType(name);
         if (type is null)
         {
             NamespaceDeclarationSyntax? namespaceSyntax = syntax.GetCurrentNamespace();

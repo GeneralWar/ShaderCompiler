@@ -184,22 +184,7 @@ namespace General.Shaders
 
         public Type? GetType(string typeName)
         {
-            if ("void" == typeName)
-            {
-                return typeof(void);
-            }
-
-            ISyntaxHost? host = mScopeStack.FirstOrDefault(c => c is ISyntaxHost) as ISyntaxHost;
-            if (host is not null)
-            {
-                Type? type = host.SyntaxNode.GetTypeFromRoot(typeName);
-                if (type is not null)
-                {
-                    return type;
-                }
-            }
-
-            return null;
+            return GetType(typeName, (mScopeStack.FirstOrDefault(c => c is ISyntaxHost) as ISyntaxHost)?.SyntaxNode);
         }
 
         public string FindVertexShaderPath(Type type)

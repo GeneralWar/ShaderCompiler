@@ -58,5 +58,28 @@ namespace General.Shaders
             }
             return global;
         }
+
+        static public Type? GetType(string typeName, SyntaxNode? syntax = null)
+        {
+            if ("void" == typeName)
+            {
+                return typeof(void);
+            }
+            if ("float" == typeName)
+            {
+                return typeof(float);
+            }
+
+            if (syntax is not null)
+            {
+                Type? type = syntax.GetTypeFromRoot(typeName);
+                if (type is not null)
+                {
+                    return type;
+                }
+            }
+
+            return null;
+        }
     }
 }

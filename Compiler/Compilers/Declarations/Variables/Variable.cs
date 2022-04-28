@@ -85,19 +85,7 @@ namespace General.Shaders
 
         private Type getTypeByTypeName(string name)
         {
-            Type? type = Type.GetType(name);
-            if (type is null && name.Contains('.'))
-            {
-                throw new InvalidDataException();
-            }
-
-            type = mSyntax?.GetTypeFromRoot(name);
-            if (type is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            return type;
+            return Compiler.GetType(name, mSyntax) ?? throw new InvalidDataException("Variables must have specific type");
         }
 
         public string AnalyzeMemberAccess(Compiler compiler, string name)

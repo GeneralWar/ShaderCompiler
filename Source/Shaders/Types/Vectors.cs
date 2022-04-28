@@ -32,6 +32,7 @@ namespace General.Shaders
 
         static public Vector3 operator *(Vector3 v1, Vector3 v2) { throw new NotImplementedException(); }
         static public Vector3 operator *(Vector3 v, float n) { throw new NotImplementedException(); }
+        static public Vector3 operator /(Vector3 v, float n) { throw new NotImplementedException(); }
     }
 
     [MemberCollector]
@@ -49,6 +50,7 @@ namespace General.Shaders
         [FieldOffset(12)] public float a;
 
         [FieldOffset(0)] public Vector3 rgb;
+        [FieldOffset(0)] public Vector3 xyz;
 
         public Vector4(float v) { throw new NotImplementedException(); }
         public Vector4(Vector3 v, float w) { throw new NotImplementedException(); }
@@ -61,5 +63,6 @@ namespace General.Shaders
         static public Vector4 operator *(Matrix4 matrix, Vector4 v) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v, float n) { throw new NotImplementedException(); }
+        static public Vector4 operator /(Vector4 v, float n) { throw new NotImplementedException(); }
     }
 }

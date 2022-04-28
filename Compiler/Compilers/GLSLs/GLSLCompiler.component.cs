@@ -66,6 +66,14 @@ namespace General.Shaders
                     {
                         return UniformType.DirectionalLightArray;
                     }
+                    if (typeof(PointLight) == elementType)
+                    {
+                        return UniformType.PointLightArray;
+                    }
+                    if (typeof(SpotLight) == elementType)
+                    {
+                        return UniformType.SpoitLightArray;
+                    }
 
                     throw new InvalidOperationException();
                 }
@@ -77,6 +85,10 @@ namespace General.Shaders
                 if (typeof(Sampler2D) == type)
                 {
                     return UniformType.Sampler2D;
+                }
+                if (typeof(AmbientLight) == type)
+                {
+                    return UniformType.AmbientLight;
                 }
                 throw new InvalidOperationException();
             }

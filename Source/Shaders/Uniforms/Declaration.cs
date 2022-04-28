@@ -8,7 +8,10 @@ namespace General.Shaders
         Transform,
         Sampler2D,
 
+        AmbientLight,
         DirectionalLightArray,
+        PointLightArray,
+        SpoitLightArray,
     }
 
     [DataContract]
