@@ -26,7 +26,7 @@ static public partial class Extension
 
     static public Type GetMemberType(this Type type, string name)
     {
-        MemberInfo[] members = type.GetMember(name);
+        MemberInfo[] members = type.GetMember(name, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         Trace.Assert(1 == members.Length);
         return members[0].GetMemberType();
     }
@@ -106,6 +106,11 @@ static public partial class Extension
         TypeNameAttribute? attribute = attributes.FirstOrDefault(a => a.Language == language);
         if (attribute is null)
         {
+            if (type.GetCustomAttribute<UniformTypeAttribute>() is not null)
+            {
+                return type.Name;
+            }
+
             throw new InvalidDataException();
         }
 

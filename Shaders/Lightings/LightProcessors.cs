@@ -6,12 +6,12 @@ namespace Shaders
     {
         static private Vector3 ProcessAmbientLight([UniformType] AmbientLight ambientLight = null)
         {
-            return ambientLight.color.rgb;
+            return ambientLight.color.rgb * ambientLight.color.a;
         }
 
         static private Vector3 ProcessDirectionLight(DirectionalLight light, Vector3 normal)
         {
-            return light.color.rgb * (1.0f + light.direction.w * MathFunctions.Dot(light.direction.xyz, normal));
+            return light.color.rgb * (1.0f + light.direction.w * MathFunctions.Dot(light.direction.xyz, -normal));
             //return light.color.rgb * light.direction.w * MathFunctions.Clamp(MathFunctions.Dot(light.direction.xyz, normal), .0f, 1.0f);
         }
 
@@ -53,11 +53,17 @@ namespace Shaders
             return factor;
         }
 
+        static private Vector3 ProcessPointLight(Vector3 lightColor, float lightIntensity, float lightRange, float factor, float distance)
+        {
+            float attenuation = MathFunctions.Max(.0f, 1.0f - distance * distance / (lightRange * lightRange));
+            return lightColor * lightIntensity * factor * attenuation; // / MathFunctions.Sqrt(color * color + 1.0f);
+        }
+
         static private Vector3 ProcessPointLight(PointLight light, Vector3 position, Vector3 normal)
         {
             Vector3 direction = position - light.position.xyz;
-            float distance = MathFunctions.Length(direction);
-            return light.color.rgb * (1.0f + light.intensity * MathFunctions.Dot(MathFunctions.Normalize(direction), normal) / (distance * distance + 1));
+            float factor = MathFunctions.Max(MathFunctions.Dot(MathFunctions.Normalize(direction), -normal), .000001f);
+            return ProcessPointLight(light.color.rgb, light.intensity, light.range, factor, MathFunctions.Length(direction));
         }
 
         static public Vector3 ProcessAllPointLights(Vector3 position, Vector3 normal, [UniformType, ArraySize(8)] PointLight[] pointLights = null)
@@ -98,9 +104,12 @@ namespace Shaders
             return factor;
         }
 
-        static private Vector3 ProcessSoptLight(SpotLight light, Vector3 normal)
+        static private Vector3 ProcessSoptLight(SpotLight light, Vector3 position, Vector3 normal)
         {
-            return new Vector3(1.0f);
+            Vector3 direction = position - light.position.xyz;
+            float angleFactor = MathFunctions.Dot(MathFunctions.Normalize(direction), light.direction.xyz);
+            float lightFactor = MathFunctions.Max(MathFunctions.Dot(MathFunctions.Normalize(direction), -normal), .000001f);
+            return MathFunctions.Step(light.cutoff, angleFactor) * ProcessPointLight(light.color.rgb, light.intensity, light.range, lightFactor, MathFunctions.Length(direction)) * (1.0f - MathFunctions.Pow(1.0f - angleFactor, 2) / MathFunctions.Pow(1.0f - light.cutoff, 2));
         }
 
         static public Vector3 ProcessAllSpotLights(Vector3 position, Vector3 normal, [UniformType, ArraySize(8)] SpotLight[] spotLights = null)
@@ -108,35 +117,35 @@ namespace Shaders
             Vector3 factor = new Vector3(.0f);
             if (1.0f == spotLights[0].color.a)
             {
-                factor += ProcessSoptLight(spotLights[0], normal);
+                factor += ProcessSoptLight(spotLights[0], position, normal);
             }
             if (1.0f == spotLights[1].color.a)
             {
-                factor += ProcessSoptLight(spotLights[1], normal);
+                factor += ProcessSoptLight(spotLights[1], position, normal);
             }
             if (1.0f == spotLights[2].color.a)
             {
-                factor += ProcessSoptLight(spotLights[2], normal);
+                factor += ProcessSoptLight(spotLights[2], position, normal);
             }
             if (1.0f == spotLights[3].color.a)
             {
-                factor += ProcessSoptLight(spotLights[3], normal);
+                factor += ProcessSoptLight(spotLights[3], position, normal);
             }
             if (1.0f == spotLights[4].color.a)
             {
-                factor += ProcessSoptLight(spotLights[4], normal);
+                factor += ProcessSoptLight(spotLights[4], position, normal);
             }
             if (1.0f == spotLights[5].color.a)
             {
-                factor += ProcessSoptLight(spotLights[5], normal);
+                factor += ProcessSoptLight(spotLights[5], position, normal);
             }
             if (1.0f == spotLights[6].color.a)
             {
-                factor += ProcessSoptLight(spotLights[6], normal);
+                factor += ProcessSoptLight(spotLights[6], position, normal);
             }
             if (1.0f == spotLights[7].color.a)
             {
-                factor += ProcessSoptLight(spotLights[7], normal);
+                factor += ProcessSoptLight(spotLights[7], position, normal);
             }
             return factor;
         }
@@ -148,7 +157,6 @@ namespace Shaders
             lightColor += ProcessAllPointLights(position, normal);
             lightColor += ProcessAllSpotLights(position, normal);
             return lightColor;
-            //return /*ProcessAmbientLight(ambient) + */color * (/*ProcessAllDirectionalLights(normal) +*/ ProcessAllPointLights(position, normal)/* + ProcessAllSpotLights(position, normal)*/);
         }
     }
 }

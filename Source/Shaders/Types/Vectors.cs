@@ -24,14 +24,18 @@ namespace General.Shaders
         public float z { get; set; }
 
         public Vector3(float v) { throw new NotImplementedException(); }
+        public Vector3(float x, float y, float z) { throw new NotImplementedException(); }
         public Vector3(Vector2 v, float z) { throw new NotImplementedException(); }
 
         static public Vector3 operator +(Vector3 v1, Vector3 v2) { throw new NotImplementedException(); }
+        static public Vector3 operator +(Vector3 v, float n) { throw new NotImplementedException(); }
         static public Vector3 operator -(Vector3 v1, Vector3 v2) { throw new NotImplementedException(); }
+        static public Vector3 operator -(Vector3 v, float n) { throw new NotImplementedException(); }
         static public Vector3 operator -(Vector3 v) { throw new NotImplementedException(); }
 
         static public Vector3 operator *(Vector3 v1, Vector3 v2) { throw new NotImplementedException(); }
         static public Vector3 operator *(Vector3 v, float n) { throw new NotImplementedException(); }
+        static public Vector3 operator *(float n, Vector3 v) { throw new NotImplementedException(); }
         static public Vector3 operator /(Vector3 v, float n) { throw new NotImplementedException(); }
     }
 
@@ -57,12 +61,15 @@ namespace General.Shaders
         public Vector4(float x, float y, float z, float w) { throw new NotImplementedException(); }
 
         static public Vector4 operator +(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
+        static public Vector3 operator +(Vector4 v, float n) { throw new NotImplementedException(); }
         static public Vector4 operator -(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
+        static public Vector3 operator -(Vector4 v, float n) { throw new NotImplementedException(); }
         static public Vector4 operator -(Vector4 v) { throw new NotImplementedException(); }
 
         static public Vector4 operator *(Matrix4 matrix, Vector4 v) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v1, Vector4 v2) { throw new NotImplementedException(); }
         static public Vector4 operator *(Vector4 v, float n) { throw new NotImplementedException(); }
+        static public Vector4 operator *(float n, Vector4 v) { throw new NotImplementedException(); }
         static public Vector4 operator /(Vector4 v, float n) { throw new NotImplementedException(); }
     }
 }

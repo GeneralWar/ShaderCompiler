@@ -2,7 +2,6 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
@@ -16,8 +15,9 @@ namespace General.Shaders
     {
         private ParameterListSyntax mSyntax;
 
-        private Dictionary<string, Variable> mParameters = new Dictionary<string, Variable>();
-        public IEnumerable<Variable> Parameters => mParameters.Values;
+        private List<Variable> mParameters = new List<Variable>();
+        public IEnumerable<Variable> Parameters => mParameters;
+        public int ParameterCount => mParameters.Count;
 
         public ParameterList(ParameterListSyntax syntax) : base("")
         {
@@ -34,7 +34,7 @@ namespace General.Shaders
                 }
 
                 Variable parameter = new Variable(parameterSyntax);
-                mParameters.TryAdd(parameter.Name, parameter);
+                mParameters.Add(parameter);
             }
         }
 
@@ -49,8 +49,8 @@ namespace General.Shaders
                 return members[0].GetMemberType();
             }
 
-            Variable? parameter;
-            if (!mParameters.TryGetValue(parameterName, out parameter))
+            Variable? parameter = mParameters.Find(p => p.Name == parameterName);
+            if (parameter is null)
             {
                 throw new InvalidDataException();
             }
@@ -60,9 +60,7 @@ namespace General.Shaders
 
         Variable? IVariableCollection.GetVariable(string name)
         {
-            Variable? parameter;
-            mParameters.TryGetValue(name, out parameter);
-            return parameter;
+            return mParameters.Find(p => p.Name == name);
         }
 
         void IVariableCollection.PushVariable(Variable variable) => throw new InvalidOperationException("Should never push local variable to a parameter list");

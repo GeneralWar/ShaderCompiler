@@ -72,7 +72,13 @@ namespace General.Shaders
 
         protected void addDeclarationDirectly(Declaration declaration)
         {
-            mChildren.Add(declaration.Name, declaration);
+            if (!mChildren.TryAdd(declaration.Name, declaration))
+            {
+                if (declaration is not Method || mChildren[declaration.Name] is not Method)
+                {
+                    throw new InvalidOperationException("Only methods can have same name");
+                }
+            }
             declaration.SetParent(this);
             declaration.Analyze();
         }

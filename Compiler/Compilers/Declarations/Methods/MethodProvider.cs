@@ -2,6 +2,6 @@
 {
     interface IMethodProvider
     {
-        Method? GetMethod(string name);
+        Method[] GetMethods(string name);
     }
 }

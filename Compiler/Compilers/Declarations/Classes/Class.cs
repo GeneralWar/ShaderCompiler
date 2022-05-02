@@ -24,6 +24,8 @@ namespace General.Shaders
         HashSet<Declaration> IReferenceHost.References => mReferences;
         public HashSet<Declaration> References => mReferences;
 
+        private List<Method> mMethods = new List<Method>();
+
         public Class(ClassDeclarationSyntax syntax) : base(syntax.Identifier.Text, syntax.GetFullName())
         {
             mSyntax = syntax;
@@ -71,9 +73,14 @@ namespace General.Shaders
 
         void IVariableCollection.PushVariable(Variable variable) => throw new InvalidOperationException("Should never push local variable to a class");
 
-        Method? IMethodProvider.GetMethod(string name)
+        Method[] IMethodProvider.GetMethods(string name)
         {
-            return this.GetDeclaration(name) as Method;
+            return this.GetMethods(name);
+        }
+
+        public Method[] GetMethods(string name)
+        {
+            return mMethods.Where(m => m.Name == name).ToArray();
         }
 
         protected override void internalAnalyze()
@@ -169,6 +176,13 @@ namespace General.Shaders
                     continue;
                 }
 
+                ClassDeclarationSyntax? classDeclarationSyntax = memberSyntax as ClassDeclarationSyntax;
+                if (classDeclarationSyntax is not null)
+                {
+                    this.AddDeclaration(new Class(classDeclarationSyntax));
+                    continue;
+                }
+
                 Debugger.Break();
                 throw new NotImplementedException();
             }
@@ -176,7 +190,14 @@ namespace General.Shaders
 
         private void addMethod(Method method)
         {
-            this.addDeclarationDirectly(method);
+            if (mMethods.Any(m => m.MethodName == method.MethodName))
+            {
+                throw new InvalidOperationException();
+            }
+
+            method.SetParent(this);
+            method.Analyze();
+            mMethods.Add(method);
         }
 
         private void analyzeVertexShader(MethodDeclarationSyntax syntax)

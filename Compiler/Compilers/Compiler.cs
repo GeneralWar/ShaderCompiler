@@ -3,8 +3,6 @@
 // Copyright (C) General. Licensed under LGPL-2.1.
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -90,6 +88,11 @@ namespace General.Shaders
                 return memberInfo.Name;
             }
 
+            if (memberInfo.DeclaringType?.GetCustomAttribute<UniformTypeAttribute>() is not null)
+            {
+                return memberInfo.Name;
+            }
+
             throw new NotImplementedException();
         }
 
@@ -149,17 +152,18 @@ namespace General.Shaders
 
         protected abstract string internalAnalyzeVariableName(Variable variable);
 
-        internal Method? GetMethod(string name)
+        internal Method[] GetMethods(string name)
         {
+            List<Method> methodList = new List<Method>();
             foreach (Declaration scope in mScopeStack)
             {
-                Method? method = (scope as IMethodProvider)?.GetMethod(name);
-                if (method is not null)
+                Method[]? methods = (scope as IMethodProvider)?.GetMethods(name);
+                if (methods is not null)
                 {
-                    return method;
+                    methodList.AddRange(methods);
                 }
             }
-            return null;
+            return methodList.ToArray();
         }
 
         internal void PushScope(Declaration scope)

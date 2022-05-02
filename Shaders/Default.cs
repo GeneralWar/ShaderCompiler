@@ -25,11 +25,12 @@ namespace Shaders
     [FragmentShader("Default/TransparentDiffuse")]
     public class DefaultDiffuseTransparentFragmentShader : IFragmentSource
     {
+        [UniformName("MainColor")] public Vector4 mainColor { get; private init; }
         [UniformName("Diffuse")] public Sampler2D diffuse { get; init; } = new Sampler2D();
 
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
-            output.color = ShaderFunctions.MapTexture(this.diffuse, input.uv0) * input.color;
+            output.color = ShaderFunctions.MapTexture(this.diffuse, input.uv0) * this.mainColor * input.color;
             output.color.rgb *= LightProcessors.ProcessAllLights(input.position.xyz, input.normal.xyz);
         }
     }
@@ -37,12 +38,13 @@ namespace Shaders
     [FragmentShader("Default/OpaqueDiffuse")]
     public class DefaultDiffuseOpaqueFragmentShader : IFragmentSource
     {
-        [UniformName("Diffuse")] public Sampler2D diffuse { get; init; } = new Sampler2D();
+        [UniformName("MainColor")] public Vector4 mainColor { get; private init; }
+        [UniformName("Diffuse")] public Sampler2D diffuse { get; private init; } = new Sampler2D();
 
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
             Vector4 color = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
-            output.color = new Vector4(color.rgb * input.color.a, 1.0f);
+            output.color = new Vector4(color.rgb * this.mainColor.rgb * input.color.rgb * input.color.a, 1.0f);
             output.color.rgb *= LightProcessors.ProcessAllLights(input.position.xyz, input.normal.xyz);
         }
     }

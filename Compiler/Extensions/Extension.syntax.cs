@@ -171,6 +171,16 @@ static public partial class Extension
         return syntax.Identifier.ValueText == name;
     }
 
+    static public bool CompareName(this ClassDeclarationSyntax? syntax, string name)
+    {
+        if (syntax is null)
+        {
+            throw new NullReferenceException();
+        }
+
+        return syntax.Identifier.ValueText == name;
+    }
+
     static public bool CompareName(this MemberDeclarationSyntax syntax, string name)
     {
         if (syntax is MethodDeclarationSyntax)
@@ -180,6 +190,10 @@ static public partial class Extension
         if (syntax is PropertyDeclarationSyntax)
         {
             return CompareName(syntax as PropertyDeclarationSyntax, name);
+        }
+        if (syntax is ClassDeclarationSyntax)
+        {
+            return CompareName(syntax as ClassDeclarationSyntax, name);
         }
         Debugger.Break();
         throw new NotImplementedException();
@@ -213,14 +227,26 @@ static public partial class Extension
         Type? type = Extension.GetType(name) ?? root.GetType(name);
         if (type is null)
         {
+            string? space = null;
             NamespaceDeclarationSyntax? namespaceSyntax = syntax.GetCurrentNamespace();
-            if (namespaceSyntax is null)
+            if (namespaceSyntax is not null)
             {
-                throw new InvalidDataException();
+                space = namespaceSyntax.Name.GetFullName();
             }
-
-            string fullTypeName = namespaceSyntax.Name.GetFullName() + "." + name;
-            type = Extension.GetType(fullTypeName);
+            if (!string.IsNullOrWhiteSpace(space))
+            {
+                string fullTypeName = space + "." + name;
+                type = Extension.GetType(fullTypeName);
+            }
+            if (type is null)
+            {
+                ClassDeclarationSyntax? declaringClass = syntax.Parent as ClassDeclarationSyntax;
+                if (declaringClass is not null)
+                {
+                    string fullTypeName = declaringClass.GetFullName() + "+" + name;
+                    type = Extension.GetType(fullTypeName);
+                }
+            }
         }
         return type;
     }

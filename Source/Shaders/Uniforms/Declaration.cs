@@ -7,11 +7,20 @@ namespace General.Shaders
     {
         Transform,
         Sampler2D,
+        Vector4,
 
         AmbientLight,
         DirectionalLightArray,
         PointLightArray,
         SpoitLightArray,
+
+        Custom = 0xffff,
+    }
+
+    public enum ShaderStage
+    {
+        VertexShader,
+        FragmentShader,
     }
 
     [DataContract]
@@ -19,11 +28,13 @@ namespace General.Shaders
     public struct UniformDeclaration
     {
         [DataMember] public UniformType Type;
+        [DataMember] public ShaderStage Stage;
         [DataMember] [MarshalAs(UnmanagedType.LPStr)] public string? Name;
 
-        public UniformDeclaration(UniformType type, string? name)
+        public UniformDeclaration(UniformType type, ShaderStage stage, string? name)
         {
             this.Type = type;
+            this.Stage = stage;
             this.Name = name;
         }
     }

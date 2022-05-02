@@ -6,6 +6,7 @@ using General.Shaders.Uniforms;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 
 namespace General.Shaders
 {
@@ -14,11 +15,13 @@ namespace General.Shaders
         class UniformProperty
         {
             public Type Type { get; private set; }
+            public Type DeclaringType { get; private set; }
             public string PropertyName { get; private set; }
             public string? PublicName { get; private set; }
 
-            public UniformProperty(Type type, string propertyName)
+            public UniformProperty(Type declaringType, Type type, string propertyName)
             {
+                this.DeclaringType = declaringType;
                 this.Type = type;
                 this.PropertyName = propertyName;
             }
@@ -38,7 +41,16 @@ namespace General.Shaders
 
             public UniformDeclaration ToDeclaration()
             {
-                return new UniformDeclaration(this.UniformType, this.PublicName);
+                ShaderStage stage = 0;
+                if (this.DeclaringType.ImplementInterface<IVertexSource>())
+                {
+                    stage = ShaderStage.VertexShader;
+                }
+                else if (this.DeclaringType.ImplementInterface<IFragmentSource>())
+                {
+                    stage = ShaderStage.FragmentShader;
+                }
+                return new UniformDeclaration(this.UniformType, stage, this.PublicName);
             }
 
             public override int GetHashCode()
@@ -86,10 +98,20 @@ namespace General.Shaders
                 {
                     return UniformType.Sampler2D;
                 }
+                if (typeof(Vector4) == type)
+                {
+                    return UniformType.Vector4;
+                }
                 if (typeof(AmbientLight) == type)
                 {
                     return UniformType.AmbientLight;
                 }
+
+                if (type.GetCustomAttribute<UniformTypeAttribute>() is not null)
+                {
+                    return UniformType.Custom;
+                }
+
                 throw new InvalidOperationException();
             }
         }

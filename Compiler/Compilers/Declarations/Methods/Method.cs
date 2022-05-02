@@ -6,6 +6,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace General.Shaders
@@ -17,6 +19,7 @@ namespace General.Shaders
         protected MethodDeclarationSyntax mSyntax;
         public MethodDeclarationSyntax Syntax => mSyntax;
         SyntaxNode ISyntaxHost.SyntaxNode => mSyntax;
+        public string MethodName => $"{mSyntax.Identifier.ValueText}_{string.Join("_", mSyntax.ParameterList.Parameters.Select(p => p.Type?.GetName() ?? p.Identifier.ValueText))}";
 
         protected ParameterList mParameterList;
         public ParameterList ParameterList => mParameterList;
@@ -39,6 +42,27 @@ namespace General.Shaders
             mParameterList = new ParameterList(syntax.ParameterList);
         }
 
+        public bool Match(MethodInfo info)
+        {
+            this.Analyze();
+
+            ParameterInfo[] parameterInfos = info.GetParameters();
+            if (mParameterList.ParameterCount != parameterInfos.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < parameterInfos.Length; ++i)
+            {
+                if (ParameterList.Parameters.ElementAt(i).Type != parameterInfos[i].ParameterType)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         protected override void internalAnalyze()
         {
             mParameterList.Analyze();
@@ -50,6 +74,8 @@ namespace General.Shaders
 
         Variable? IVariableCollection.GetVariable(string name)
         {
+            this.Analyze();
+
             Variable? variable;
             if (!mLocalVariables.TryGetValue(name, out variable))
             {
@@ -63,13 +89,18 @@ namespace General.Shaders
             mLocalVariables.Add(variable.Name, variable); // should never exist multiple local variables with same name
         }
 
-        Method? IMethodProvider.GetMethod(string name)
+        Method[] IMethodProvider.GetMethods(string name)
         {
-            return (this.DeclaringClass as IMethodProvider).GetMethod(name);
+            return this.DeclaringClass?.GetMethods(name) ?? new Method[0];
         }
 
         void IReferenceHost.AppendReference(Declaration reference)
         {
+            if (this == reference)
+            {
+                return;
+            }
+
             mReferences.Add(reference);
         }
 

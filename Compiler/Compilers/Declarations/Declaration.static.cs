@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 
@@ -89,11 +90,11 @@ namespace General.Shaders
                     return compiler.AnalyzeVariableName(variable);
                 }
 
-                Method? method = compiler.GetMethod(name);
-                if (method is not null)
+                Method[] methods = compiler.GetMethods(name);
+                if (methods.Length > 0)
                 {
-                    compiler.CurrentReferenceHost.AppendReference(method);
-                    return method.Name;
+                    Array.ForEach(methods, m => compiler.CurrentReferenceHost.AppendReference(m));
+                    return name;
                 }
 
                 throw new InvalidDataException();
@@ -145,6 +146,12 @@ namespace General.Shaders
             if (parenthesizedExpressionSyntax is not null)
             {
                 return parenthesizedExpressionSyntax.OpenParenToken + CompileExpressionSyntax(compiler, parenthesizedExpressionSyntax.Expression) + parenthesizedExpressionSyntax.CloseParenToken;
+            }
+
+            ConditionalExpressionSyntax? conditionalExpressionSyntax = syntax as ConditionalExpressionSyntax;
+            if (conditionalExpressionSyntax is not null)
+            {
+                return $"{CompileExpressionSyntax(compiler, conditionalExpressionSyntax.Condition)} {conditionalExpressionSyntax.QuestionToken.ValueText} {CompileExpressionSyntax(compiler, conditionalExpressionSyntax.WhenTrue)} {conditionalExpressionSyntax.ColonToken.ValueText} {CompileExpressionSyntax(compiler, conditionalExpressionSyntax.WhenFalse)}";
             }
 
             Debugger.Break();
@@ -252,10 +259,11 @@ namespace General.Shaders
 
         static protected string CompileLiteralExpressionSyntax(Compiler compiler, LiteralExpressionSyntax literalExpressionSyntax)
         {
+            string valueText = literalExpressionSyntax.Token.ValueText;
             switch ((SyntaxKind)literalExpressionSyntax.RawKind)
             {
                 case SyntaxKind.NumericLiteralExpression:
-                    return literalExpressionSyntax.Token.ValueText;
+                    return valueText;
             }
 
             Debugger.Break();
@@ -314,14 +322,14 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            Declaration? declaration = typeClass.GetDeclaration(methodInfo.Name);
-            if (declaration is null || declaration is not Method)
+            Method? method = typeClass.GetMethods(methodInfo.Name).FirstOrDefault(m => m.Match(methodInfo));
+            if (method is null || method is not Method)
             {
                 throw new InvalidDataException();
             }
 
-            compiler.CurrentReferenceHost.AppendReference(declaration);
-            return declaration.Name;
+            compiler.CurrentReferenceHost.AppendReference(method);
+            return method.Name;
         }
 
         static protected string CompileElementAccessExpressionSyntax(Compiler compiler, ElementAccessExpressionSyntax syntax)
@@ -414,7 +422,7 @@ namespace General.Shaders
             LiteralExpressionSyntax? literalExpressionSyntax = syntax.Expression as LiteralExpressionSyntax;
             if (literalExpressionSyntax is not null)
             {
-                return literalExpressionSyntax.Token.Text;
+                return CompileLiteralExpressionSyntax(compiler, literalExpressionSyntax);
             }
 
             return CompileExpressionSyntax(compiler, syntax.Expression);

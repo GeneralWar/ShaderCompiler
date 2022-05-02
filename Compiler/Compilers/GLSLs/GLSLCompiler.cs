@@ -2,6 +2,7 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using General.Shaders.Uniforms;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
@@ -115,8 +116,8 @@ namespace General.Shaders
                 Directory.CreateDirectory(directory);
             }
 
-            Method? method = shaderInstance.GetDeclaration(methodName) as Method;
-            if (method is null)
+            Method[] methods = shaderInstance.GetMethods(methodName);
+            if (1 != methods.Length)
             {
                 throw new InvalidDataException();
             }
@@ -124,13 +125,13 @@ namespace General.Shaders
             GLSLCompileContext context = new GLSLCompileContext();
             this.PushScope(shaderInstance);
 
-            string headerContent = this.declareHeader(context, shaderInstance, method);
-            string methodContent = this.declareShaderMainMethod(context, shaderInstance, method);
+            string headerContent = this.declareHeader(context, shaderInstance, methods[0]);
+            string methodContent = this.declareShaderMainMethod(context, shaderInstance, methods[0]);
 
             // should compile references before constants, referenced methods may need constants
             StringBuilder referenceBuilder = new StringBuilder();
             this.declareReferences(context, shaderInstance.References);
-            this.declareReferences(context, method.References);
+            this.declareReferences(context, methods[0].References);
             if (context.References.Count() > 0)
             {
                 referenceBuilder.AppendLine(string.Join(Environment.NewLine, context.References));
@@ -199,14 +200,22 @@ namespace General.Shaders
 
         public void declareUniforms(GLSLCompileContext context, Type type)
         {
-            foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo))
+            foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo || m is Type))
             {
-                if (memberInfo.GetMemberType().GetCustomAttribute<UniformTypeAttribute>() is null)
+                if (memberInfo.GetMemberType().GetCustomAttribute<UniformTypeAttribute>() is null && memberInfo.GetCustomAttribute<UniformNameAttribute>() is null)
                 {
                     continue;
                 }
 
-                this.declareAsUniformData(context, type, memberInfo, memberInfo.Name, memberInfo);
+                //Type? memberType = memberInfo as Type;
+                //if (memberType is null)
+                //{
+                //    this.declareAsUniformData(context, type, memberInfo, memberInfo.Name, memberInfo);
+                //}
+                //else
+                {
+                    this.declareAsUniformData(context, type, memberInfo, memberInfo.Name, memberInfo);
+                }
             }
         }
 
@@ -225,6 +234,7 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
+            UniformNameAttribute? nameAttribute = memberInfo.GetCustomAttribute<UniformNameAttribute>();
             string uniformName = $"Uniform{shaderTypeName}";
             if (memberType.IsArray)
             {
@@ -257,14 +267,27 @@ namespace General.Shaders
                     builder.AppendLine("};");
                     context.AddUniform(uniformName, builder.ToString());
                 }
+                else if (typeof(Sampler2D) != memberType)
+                {
+                    if (nameAttribute is null)
+                    {
+                        throw new InvalidDataException("GLSL can only declare Sampler2D and Image as simple uniform, others must have block");
+                    }
+
+                    StringBuilder builder = new StringBuilder();
+                    builder.AppendLine($"layout(binding = {{binding-{memberName}}}) uniform Uniform{nameAttribute.Name}");
+                    builder.AppendLine("{");
+                    builder.AppendLine(1, $"{shaderTypeName} {instanceName};");
+                    builder.AppendLine("};");
+                    context.AddUniform(uniformName, builder.ToString());
+                }
                 else
                 {
                     context.AddUniform(uniformName, $"layout(binding = {{binding-{memberName}}}) uniform {shaderTypeName} {instanceName};" + Environment.NewLine);
                 }
             }
 
-            UniformProperty uniform = new UniformProperty(memberType, memberName);
-            UniformNameAttribute? nameAttribute = memberInfo.GetCustomAttribute<UniformNameAttribute>();
+            UniformProperty uniform = new UniformProperty(componentType, memberType, memberName);
             if (nameAttribute is not null)
             {
                 uniform.SetPublicName(nameAttribute.Name);
@@ -513,7 +536,7 @@ namespace General.Shaders
                 Method? method = r as Method;
                 if (method is not null)
                 {
-                    context.AddReference(method.Name, this.declareFunction(context, method));
+                    context.AddReference(method.MethodName, this.declareFunction(context, method));
                 }
             }
         }
@@ -541,13 +564,14 @@ namespace General.Shaders
         {
             Type declaringType = method.DeclaringClass.Type;
             IEnumerable<MethodInfo> methodInfos = declaringType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance).Where(m => m.Name == method.Name);
-            if (1 != methodInfos.Count())
+
+            List<string> parameters = new List<string>();
+            MethodInfo? methodInfo = methodInfos.FirstOrDefault(m => method.Match(m));
+            if (methodInfo is null)
             {
                 throw new InvalidDataException();
             }
 
-            List<string> parameters = new List<string>();
-            MethodInfo methodInfo = methodInfos.First();
             foreach (ParameterInfo parameterInfo in methodInfo.GetParameters())
             {
                 if (typeof(InputFragment) == parameterInfo.ParameterType)
