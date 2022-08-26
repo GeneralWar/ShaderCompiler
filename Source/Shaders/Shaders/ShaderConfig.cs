@@ -17,7 +17,7 @@ namespace General.Shaders
         [DataMember] public PolygonType[] polygonTypes = new PolygonType[0];
         [DataMember] public UniformDeclaration[] uniforms = new UniformDeclaration[0];
 
-        private ShaderConfig() { }
+        public ShaderConfig() { }
 
         public ShaderConfig(string key, RenderType type, int queue)
         {
