@@ -37,5 +37,10 @@ namespace General.Shaders
             this.Stage = stage;
             this.Name = name;
         }
+
+        public override string ToString()
+        {
+            return $"{(string.IsNullOrWhiteSpace(this.Name) ? "(NoName)" : this.Name)}, {this.Type}, {this.Stage}";
+        }
     }
 }

@@ -43,8 +43,8 @@ namespace Shaders
 
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
-            Vector4 color = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
-            output.color = new Vector4(color.rgb * this.mainColor.rgb * input.color.rgb * input.color.a, 1.0f);
+            Vector4 textureColor = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
+            output.color = new Vector4(textureColor.rgb * this.mainColor.rgb * input.color.rgb * input.color.a, 1.0f);
             output.color.rgb *= LightProcessors.ProcessAllLights(input.position.xyz, input.normal.xyz);
         }
     }
