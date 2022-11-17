@@ -3,11 +3,13 @@
 // Copyright (C) General. Licensed under LGPL-2.1.
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 
 namespace General.Shaders
@@ -23,14 +25,12 @@ namespace General.Shaders
         private Stack<Declaration> mScopeStack = new Stack<Declaration>();
 
         internal IVariableCollection CurrentVariableCollection => mScopeStack.FirstOrDefault(s => s is IVariableCollection) as IVariableCollection ?? throw new InvalidOperationException("Should always have more than one variable collection");
-        internal IReferenceHost CurrentReferenceHost => mScopeStack.FirstOrDefault(s => s is IReferenceHost) as IReferenceHost ?? throw new InvalidOperationException("Should always have more than one reference host");
+        private IReferenceHost? CurrentReferenceHost => mScopeStack.FirstOrDefault(s => s is IReferenceHost) as IReferenceHost;
 
         private Dictionary<Type, string> mVertexShaderPathMap = new Dictionary<Type, string>();
         private Dictionary<Type, string> mFragmentShaderPathMap = new Dictionary<Type, string>();
 
-        internal Namespace? Global { get; private set; }
-
-        public int TabCount { get; private set; }
+        private Namespace? Global { get; set; }
 
         public Compiler(Language language)
         {
@@ -42,10 +42,6 @@ namespace General.Shaders
         {
             mOutputDirectory = path;
         }
-
-        public void IncreaseTabCount() => ++this.TabCount;
-
-        public void DecreaseTabCount() => --this.TabCount;
 
         internal string AnalyzeMemberName(Type type, string name)
         {
@@ -108,7 +104,7 @@ namespace General.Shaders
 
         public string AnalyzeElementAccess(string variableName, string elementName)
         {
-            Variable? variable = this.GetVariable(variableName);
+            ITypeHost? variable = this.GetVariable<ITypeHost>(variableName);
             if (variable is null)
             {
                 throw new InvalidDataException();
@@ -133,24 +129,39 @@ namespace General.Shaders
 
         protected abstract string internalAnalyzeElementAccess(string variableName, string elementName);
 
-        internal Variable? GetVariable(string name)
+        internal T? GetVariable<T>(string name) where T : class
         {
             Trace.Assert(!name.Contains('.'));
 
             foreach (Declaration scope in mScopeStack)
             {
                 Variable? variable = (scope as IVariableCollection)?.GetVariable(name);
-                if (variable is not null)
+                if (variable is T)
                 {
-                    return variable;
+                    return variable as T;
+                }
+
+                Declaration? member = (scope as DeclarationContainer)?.GetDeclaration(name);
+                if (member is T)
+                {
+                    return member as T;
                 }
             }
             return null;
         }
 
-        internal string AnalyzeVariableName(Variable variable) => this.internalAnalyzeVariableName(variable);
+        internal string AnalyzeVariableName(CompileContext context, Declaration variable)
+        {
+            Member? member = variable as Member;
+            if (member is not null)
+            {
+                context.CheckMember(member);
+            }
 
-        protected abstract string internalAnalyzeVariableName(Variable variable);
+            return this.internalAnalyzeVariableName(variable);
+        }
+
+        internal abstract string internalAnalyzeVariableName(Declaration variable);
 
         internal Method[] GetMethods(string name)
         {
@@ -166,9 +177,33 @@ namespace General.Shaders
             return methodList.ToArray();
         }
 
-        internal void PushScope(Declaration scope)
+        // current usage: lighting fragment refer to LightProcessor
+        public void AppendReference(Declaration reference)
         {
+            if (this.Global == reference)
+            {
+                return;
+            }
+
+            IReferenceHost? host = this.CurrentReferenceHost;
+            if (host is null || reference.HasAncestor(host))
+            {
+                return;
+            }
+
+            host.AddReference(reference);
+        }
+
+        internal virtual bool PushScope(Declaration scope)
+        {
+            if (mScopeStack.Count > 0 && mScopeStack.Peek() == scope)
+            {
+                return false;
+            }
+
+            this.AppendReference(scope);
             mScopeStack.Push(scope);
+            return true;
         }
 
         internal T? GetCurrent<T>() where T : Declaration
@@ -176,7 +211,7 @@ namespace General.Shaders
             return mScopeStack.FirstOrDefault(c => c is T) as T;
         }
 
-        internal void PopScope(Declaration scope)
+        internal virtual void PopScope(Declaration scope)
         {
             if (mScopeStack.Peek() != scope)
             {
@@ -215,17 +250,18 @@ namespace General.Shaders
         internal void Compile(Assembly assembly, Namespace global)
         {
             this.Global = global;
+            this.PushScope(this.Global); // TODO: maybe should never get something from Global directly, enumerate scope stack instead
 
             HashSet<Type> vertexShaders = new HashSet<Type>();
             HashSet<Type> fragmentShaders = new HashSet<Type>();
             HashSet<Type> graphicsShaders = new HashSet<Type>();
             foreach (Type type in assembly.GetTypes())
             {
-                if (type.ImplementInterface<IVertexSource>())
+                if (type.ImplementedInterface<IVertexSource>())
                 {
                     vertexShaders.Add(type);
                 }
-                if (type.ImplementInterface<IFragmentSource>())
+                if (type.ImplementedInterface<IFragmentSource>())
                 {
                     fragmentShaders.Add(type);
                 }
@@ -256,11 +292,12 @@ namespace General.Shaders
             VertexShaderAttribute? attribute = type.GetCustomAttribute<VertexShaderAttribute>();
             if (attribute is null)
             {
-                throw new InvalidDataException();
+                Compiler.LogWarning($"{type} does not have a {nameof(VertexShaderAttribute)}, ignore it");
+                return;
             }
 
-            string filename = this.internalCompileVertexShader(type, attribute);
-            mVertexShaderPathMap.Add(type, filename);
+            Class instance = this.internalCompileVertexShader(type, attribute);
+            mVertexShaderPathMap.Add(type, instance.OutputFilename ?? throw new InvalidOperationException("Compiled Class must have a valid output filename"));
         }
 
         /// <summary>
@@ -269,18 +306,19 @@ namespace General.Shaders
         /// <param name="type">Type which implement <see cref="IVertexSource"/></param>
         /// <param name="attribute"><see cref="VertexShaderAttribute"/> which specified the path to save compiled shader</param>
         /// <returns>Path to save the compiled shader</returns>
-        protected abstract string internalCompileVertexShader(Type type, VertexShaderAttribute attribute);
+        internal abstract Class internalCompileVertexShader(Type type, VertexShaderAttribute attribute);
 
         private void compileFragmentShader(Type type)
         {
             FragmentShaderAttribute? attribute = type.GetCustomAttribute<FragmentShaderAttribute>();
             if (attribute is null)
             {
-                throw new InvalidDataException();
+                Compiler.LogWarning($"{type} does not have a {nameof(FragmentShaderAttribute)}, ignore it");
+                return;
             }
 
-            string filename = this.internalCompileFragmentShader(type, attribute);
-            mFragmentShaderPathMap.Add(type, filename);
+            Class instance = this.internalCompileFragmentShader(type, attribute);
+            mFragmentShaderPathMap.Add(type, instance.OutputFilename ?? throw new InvalidOperationException("Compiled Class must have a valid output filename"));
         }
 
         /// <summary>
@@ -289,7 +327,7 @@ namespace General.Shaders
         /// <param name="type">Type which implement <see cref="IFragmentSource"/></param>
         /// <param name="attribute"><see cref="FragmentShaderAttribute"/> which specified the path to save compiled shader</param>
         /// <returns>Path to save the compiled shader</returns>
-        protected abstract string internalCompileFragmentShader(Type type, FragmentShaderAttribute attribute);
+        internal abstract Class internalCompileFragmentShader(Type type, FragmentShaderAttribute attribute);
 
         private void compileGraphicsShader(Type type)
         {
@@ -311,9 +349,44 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            this.compileGraphicsShader(type, vertexShaderType, fragmentShaderType);
+            this.internalCompileGraphicsShader(type, vertexShaderType, fragmentShaderType);
         }
 
-        internal abstract void compileGraphicsShader(Type shaderType, Type vertexShaderType, Type fragmentShaderType);
+        internal abstract void internalCompileGraphicsShader(Type shaderType, Type vertexShaderType, Type fragmentShaderType);
+
+        public T? GetDeclaration<T>(string name) where T : Declaration
+        {
+            return this.Global?.GetDeclaration(name) as T;
+        }
+
+        public Declaration? GetDeclaration(string name) 
+        {
+            return this.Global?.GetDeclaration(name);
+        }
+
+        public void PushVariable(TypeSyntax typeSyntax, VariableDeclaratorSyntax syntax)
+        {
+            this.CurrentVariableCollection.PushVariable(new Variable(this.Global ?? throw new InvalidOperationException("No global namespace"), typeSyntax, syntax));
+        }
+
+        internal ArgumentList CreateArgumentList(ArgumentListSyntax syntax)
+        {
+            return new ArgumentList(this.Global ?? throw new InvalidOperationException("No global namespace"), syntax);
+        }
+
+        public bool IsPrimitiveType(Type type)
+        {
+            if (type.IsPrimitive)
+            {
+                return true;
+            }
+
+            if (typeof(Matrix4) == type)
+            {
+                return true;
+            }
+
+            return false;
+        }
     }
 }

@@ -4,7 +4,7 @@
 
 namespace General.Shaders.Uniforms
 {
-    [UniformType]
+    [UniformType(UniformType.Transform)]
     [TypeName(Language.GLSL, nameof(Transform))]
     public class Transform
     {

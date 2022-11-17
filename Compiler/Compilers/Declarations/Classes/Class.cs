@@ -12,21 +12,24 @@ using System.Linq;
 
 namespace General.Shaders
 {
-    internal class Class : DeclarationContainer, IVariableCollection, ISyntaxHost, IMethodProvider, IReferenceHost
+    internal class Class : DeclarationContainer, IVariableCollection, IMethodProvider, IReferenceHost, IUniformHost
     {
         private ClassDeclarationSyntax mSyntax;
-        public ClassDeclarationSyntax Syntax => mSyntax;
-        SyntaxNode ISyntaxHost.SyntaxNode => mSyntax;
 
         public Type Type => Extension.GetType(mSyntax.GetFullName()) ?? throw new InvalidDataException();
 
         private HashSet<Declaration> mReferences = new HashSet<Declaration>();
-        HashSet<Declaration> IReferenceHost.References => mReferences;
+        IEnumerable<Declaration> IReferenceHost.References => this.References;
         public HashSet<Declaration> References => mReferences;
 
         private List<Method> mMethods = new List<Method>();
 
-        public Class(ClassDeclarationSyntax syntax) : base(syntax.Identifier.Text, syntax.GetFullName())
+        public string? OutputFilename { get; private set; }
+
+        private HashSet<Declaration> mUniforms = new HashSet<Declaration>();
+        public IEnumerable<Declaration> Uniforms => throw new NotImplementedException();
+
+        public Class(DeclarationContainer root, ClassDeclarationSyntax syntax) : base(root, syntax, syntax.Identifier.Text, syntax.GetFullName())
         {
             mSyntax = syntax;
         }
@@ -38,7 +41,7 @@ namespace General.Shaders
 
         protected override void checkDeclarationCanAdd(Declaration declaration)
         {
-            if (declaration is Class || declaration is Method || declaration is Variable)
+            if (declaration is Class || declaration is Member || declaration is Variable)
             {
                 return;
             }
@@ -50,7 +53,7 @@ namespace General.Shaders
 
         public override Class RegisterClass(ClassDeclarationSyntax syntax)
         {
-            Class instance = new Class(syntax);
+            Class instance = new Class(this.Root, syntax);
             this.AddDeclaration(instance);
             return instance;
         }
@@ -60,7 +63,7 @@ namespace General.Shaders
             Declaration? instance = this.GetDeclaration(syntax.GetName());
             if (instance is null && createIfNotExist)
             {
-                instance = new Class(syntax);
+                instance = new Class(this.Root, syntax);
                 this.AddDeclaration(instance);
             }
             return instance as Class;
@@ -149,37 +152,39 @@ namespace General.Shaders
                 {
                     if (methodDeclarationSyntax.CompareName(nameof(IVertexSource.OnVertex)))
                     {
-                        this.addMethod(new VertexShaderMethod(methodDeclarationSyntax));
+                        this.addMethod(new VertexShaderMethod(this.Root, this, methodDeclarationSyntax));
                     }
                     else if (methodDeclarationSyntax.CompareName(nameof(IFragmentSource.OnFragment)))
                     {
-                        this.addMethod(new FragmentShaderMethod(methodDeclarationSyntax));
+                        this.addMethod(new FragmentShaderMethod(this.Root, this, methodDeclarationSyntax));
                     }
                     else
                     {
-                        this.addMethod(new Method(methodDeclarationSyntax));
+                        this.addMethod(new Method(this.Root, this, methodDeclarationSyntax));
                     }
                     continue;
                 }
 
+                // TODO: should check uniform here, or record member info
+
                 PropertyDeclarationSyntax? propertyDeclarationSyntax = memberSyntax as PropertyDeclarationSyntax;
                 if (propertyDeclarationSyntax is not null)
                 {
-                    this.AddDeclaration(new Variable(propertyDeclarationSyntax));
+                    this.analyzeProperty(propertyDeclarationSyntax);
                     continue;
                 }
 
                 FieldDeclarationSyntax? fieldDeclarationSyntax = memberSyntax as FieldDeclarationSyntax;
                 if (fieldDeclarationSyntax is not null)
                 {
-                    this.AddDeclaration(new Variable(fieldDeclarationSyntax));
+                    this.analyzeField(fieldDeclarationSyntax);
                     continue;
                 }
 
                 ClassDeclarationSyntax? classDeclarationSyntax = memberSyntax as ClassDeclarationSyntax;
                 if (classDeclarationSyntax is not null)
                 {
-                    this.AddDeclaration(new Class(classDeclarationSyntax));
+                    this.analyzeClass(classDeclarationSyntax);
                     continue;
                 }
 
@@ -187,6 +192,22 @@ namespace General.Shaders
                 throw new NotImplementedException();
             }
         }
+
+        protected override void analyzeProperty(PropertyDeclarationSyntax syntax)
+        {
+            base.analyzeProperty(syntax);
+        }
+
+        protected override void analyzeField(FieldDeclarationSyntax syntax)
+        {
+            base.analyzeField(syntax);
+        }
+
+        protected override void analyzeClass(ClassDeclarationSyntax syntax)
+        {
+            base.analyzeClass(syntax);
+        }
+
 
         private void addMethod(Method method)
         {
@@ -202,24 +223,34 @@ namespace General.Shaders
 
         private void analyzeVertexShader(MethodDeclarationSyntax syntax)
         {
-            this.addMethod(new VertexShaderMethod(syntax));
+            this.addMethod(new VertexShaderMethod(this.Root, this, syntax));
         }
 
         private void analyzeFragmentShader(MethodDeclarationSyntax syntax)
         {
-            this.addMethod(new FragmentShaderMethod(syntax));
+            this.addMethod(new FragmentShaderMethod(this.Root, this, syntax));
         }
 
         public override Method RegisterMethod(MethodDeclarationSyntax syntax)
         {
-            Method method = new Method(syntax);
+            Method method = new Method(this.Root, this, syntax);
             this.addMethod(method);
             return method;
         }
 
-        void IReferenceHost.AppendReference(Declaration reference)
+        void IReferenceHost.AddReference(Declaration reference)
         {
             mReferences.Add(reference);
+        }
+
+        public void AddUniform(Declaration uniform)
+        {
+            mUniforms.Add(uniform);
+        }
+
+        public void SetOutputFilename(string filename)
+        {
+            this.OutputFilename = filename;
         }
     }
 }

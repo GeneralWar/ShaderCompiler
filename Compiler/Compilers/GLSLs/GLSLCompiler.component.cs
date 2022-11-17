@@ -2,121 +2,87 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
-using General.Shaders.Uniforms;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
+using System.Diagnostics;
 
 namespace General.Shaders
 {
     partial class GLSLCompiler : Compiler
     {
-        class UniformProperty
+        internal class UniformProperty
         {
-            public Type Type { get; private set; }
-            public Type DeclaringType { get; private set; }
-            public string PropertyName { get; private set; }
-            public string? PublicName { get; private set; }
+            public UniformTypeAttribute TypeAttribute { get; init; }
+            public UniformUsageAttribute UsageAttribute { get; init; }
+            /// <summary>
+            /// Defined by <see cref="UniformUsageAttribute"/>, as display text
+            /// </summary>
+            public string? PublicName => this.UsageAttribute.DisplayName;
 
-            public UniformProperty(Type declaringType, Type type, string propertyName)
+            private string mUniformName;
+            public string UniformName => mUniformName;
+            public Type SourceType { get; init; }
+
+            public Type DeclaringType { get; init; }
+            public ShaderStage Stage { get; init; }
+            public string InstanceName { get; init; }
+            public string PlaceHolder => "{binding-" + this.InstanceName + "}";
+
+            public string? Content { get; private set; }
+
+            public UniformProperty(UniformTypeAttribute typeAttribute, UniformUsageAttribute usageAttribute, Type declaringType, Type sourceType, string instanceName)
             {
+                this.TypeAttribute = typeAttribute;
+                this.UsageAttribute = usageAttribute;
                 this.DeclaringType = declaringType;
-                this.Type = type;
-                this.PropertyName = propertyName;
-            }
+                this.SourceType = sourceType;
+                this.InstanceName = instanceName;
 
-            public void SetPublicName(string value)
-            {
-                this.PublicName = value;
-            }
-
-            public UniformType UniformType
-            {
-                get
+                mUniformName = $"Uniform{char.ToUpper(instanceName[0]) + instanceName.Substring(1)}";
+                if (sourceType.IsArray)
                 {
-                    return ConvertToUniformType(this.Type);
+                    mUniformName = mUniformName.TrimEnd('[', ']') + "Array";
                 }
+
+                if (this.DeclaringType.ImplementedInterface<IVertexSource>())
+                {
+                    this.Stage = ShaderStage.VertexShader;
+                }
+                else if (this.DeclaringType.ImplementedInterface<IFragmentSource>())
+                {
+                    this.Stage = ShaderStage.FragmentShader;
+                }
+                Trace.Assert(ShaderStage.None != this.Stage);
+            }
+
+            public void SetContent(string value)
+            {
+                this.Content = value;
             }
 
             public UniformDeclaration ToDeclaration()
             {
-                ShaderStage stage = 0;
-                if (this.DeclaringType.ImplementInterface<IVertexSource>())
-                {
-                    stage = ShaderStage.VertexShader;
-                }
-                else if (this.DeclaringType.ImplementInterface<IFragmentSource>())
-                {
-                    stage = ShaderStage.FragmentShader;
-                }
-                return new UniformDeclaration(this.UniformType, stage, this.PublicName);
+                return new UniformDeclaration(this.TypeAttribute.Type, this.Stage, this.UsageAttribute.Usage, this.PublicName);
             }
 
             public override int GetHashCode()
             {
-                return HashCode.Combine(this.Type, this.PropertyName);
+                return HashCode.Combine(this.SourceType, this.InstanceName);
             }
 
             public override bool Equals(object? obj)
             {
                 UniformProperty? other = obj as UniformProperty;
-                return other is not null && other.Type == this.Type && other.PropertyName == this.PropertyName;
+                return other is not null && other.SourceType == this.SourceType && other.InstanceName == this.InstanceName;
             }
 
             public override string ToString()
             {
-                return $"{this.PropertyName}({this.Type.FullName ?? this.Type.Name})";
-            }
-
-            static private UniformType ConvertToUniformType(Type type)
-            {
-                if (type.IsArray)
-                {
-                    Type elementType = type.GetElementType() ?? throw new InvalidDataException("Arrays must have element type");
-                    if (typeof(DirectionalLight) == elementType)
-                    {
-                        return UniformType.DirectionalLightArray;
-                    }
-                    if (typeof(PointLight) == elementType)
-                    {
-                        return UniformType.PointLightArray;
-                    }
-                    if (typeof(SpotLight) == elementType)
-                    {
-                        return UniformType.SpoitLightArray;
-                    }
-
-                    throw new InvalidOperationException();
-                }
-
-                if (typeof(Transform) == type)
-                {
-                    return UniformType.Transform;
-                }
-                if (typeof(Sampler2D) == type)
-                {
-                    return UniformType.Sampler2D;
-                }
-                if (typeof(Vector4) == type)
-                {
-                    return UniformType.Vector4;
-                }
-                if (typeof(AmbientLight) == type)
-                {
-                    return UniformType.AmbientLight;
-                }
-
-                if (type.GetCustomAttribute<UniformTypeAttribute>() is not null)
-                {
-                    return UniformType.Custom;
-                }
-
-                throw new InvalidOperationException();
+                return $"{this.InstanceName}({this.SourceType.FullName ?? this.SourceType.Name})";
             }
         }
 
-        class ComponentData
+        internal class ComponentData
         {
             /// <summary>
             /// Shader component type
@@ -126,9 +92,9 @@ namespace General.Shaders
             private List<UniformProperty> mUniforms = new List<UniformProperty>();
             public UniformProperty[] Uniforms => mUniforms.ToArray();
 
-            /// <summary>
-            /// 
-            /// </summary>
+            private HashSet<string> mExtensions = new HashSet<string>();
+            public HashSet<string> Extensions => mExtensions;
+
             /// <param name="type">Shader component type, such as <see cref="DefaultVertexShader"/></param>
             public ComponentData(Type type)
             {
@@ -139,9 +105,17 @@ namespace General.Shaders
             {
                 mUniforms.Add(property);
             }
+
+            public void AddExtension(string extension)
+            {
+                mExtensions.Add(extension);
+            }
         }
 
         private Dictionary<Type, ComponentData> mComponentDataMap = new Dictionary<Type, ComponentData>();
+
+        private Stack<ComponentData> mComponentDataStack = new Stack<ComponentData>();
+        public ComponentData? CurrentComponentData => mComponentDataStack.Count > 0 ? mComponentDataStack.Peek() : null;
 
         private ComponentData getComponentData(Type type)
         {
@@ -151,6 +125,33 @@ namespace General.Shaders
                 mComponentDataMap.Add(type, data = new ComponentData(type));
             }
             return data;
+        }
+
+        internal override bool PushScope(Declaration scope)
+        {
+            if (!base.PushScope(scope))
+            {
+                return false;
+            }
+
+            Class? classDeclaration = scope as Class;
+            if (classDeclaration is not null && classDeclaration.Type.IsShaderComponent())
+            {
+                mComponentDataStack.Push(this.getComponentData(classDeclaration.Type));
+            }
+            return true;
+        }
+
+        internal override void PopScope(Declaration scope)
+        {
+            Class? classDeclaration = scope as Class;
+            if (classDeclaration is not null && classDeclaration.Type.IsShaderComponent())
+            {
+                Trace.Assert(mComponentDataStack.Peek()==this.getComponentData(classDeclaration.Type));
+                mComponentDataStack.Pop();
+            }
+
+            base.PopScope(scope);
         }
     }
 }

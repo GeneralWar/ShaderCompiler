@@ -14,6 +14,7 @@ namespace General.Shaders
 
     public enum OutputField
     {
+        TransformedPosition,
         Position,
         Color,
         Normal,

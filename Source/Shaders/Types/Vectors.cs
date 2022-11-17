@@ -13,6 +13,17 @@ namespace General.Shaders
     {
         public float x { get; set; }
         public float y { get; set; }
+
+        public Vector2(float x, float y) { throw new NotImplementedException(); }
+
+        static public Vector2 operator +(Vector2 v1, Vector2 v2) { throw new NotImplementedException(); }
+        static public Vector2 operator +(Vector2 v1, float n) { throw new NotImplementedException(); }
+        static public Vector2 operator -(Vector2 v1, Vector2 v2) { throw new NotImplementedException(); }
+        static public Vector2 operator -(Vector2 v1, float n) { throw new NotImplementedException(); }
+        static public Vector2 operator *(Vector2 v1, Vector2 v2) { throw new NotImplementedException(); }
+        static public Vector2 operator *(Vector2 v1, float n) { throw new NotImplementedException(); }
+        static public Vector2 operator /(Vector2 v1, Vector2 v2) { throw new NotImplementedException(); }
+        static public Vector2 operator /(Vector2 v1, float n) { throw new NotImplementedException(); }
     }
 
     [MemberCollector]
@@ -40,6 +51,7 @@ namespace General.Shaders
     }
 
     [MemberCollector]
+    [UniformType(UniformType.Vector4)]
     [TypeName(Language.GLSL, "vec4", DefaultConstructor = "vec4(0)")]
     [StructLayout(LayoutKind.Explicit)]
     public struct Vector4
@@ -52,6 +64,8 @@ namespace General.Shaders
         [FieldOffset(8)] public float b;
         [FieldOffset(12)] public float w;
         [FieldOffset(12)] public float a;
+
+        [FieldOffset(0)] public Vector2 xy;
 
         [FieldOffset(0)] public Vector3 rgb;
         [FieldOffset(0)] public Vector3 xyz;

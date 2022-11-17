@@ -11,7 +11,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace General.Shaders
 {
@@ -24,270 +23,164 @@ namespace General.Shaders
             Analyzed,
         }
 
-        static protected string CompileStatement(Compiler compiler, StatementSyntax syntax)
+        static private Dictionary<Type, MethodInfo> sStatementCompilerMethods = new Dictionary<Type, MethodInfo>();
+        static private Dictionary<Type, MethodInfo> sExpressionCompilerMethods = new Dictionary<Type, MethodInfo>();
+
+        static Declaration()
         {
-            ExpressionStatementSyntax? expressionStatementSyntax = syntax as ExpressionStatementSyntax;
-            if (expressionStatementSyntax is not null)
-            {
-                return CompileExpressionStatementSyntax(compiler, expressionStatementSyntax);
-            }
-
-            LocalDeclarationStatementSyntax? localDeclarationStatementSyntax = syntax as LocalDeclarationStatementSyntax;
-            if (localDeclarationStatementSyntax is not null)
-            {
-                return CompileLocalDeclarationStatementSyntax(compiler, localDeclarationStatementSyntax);
-            }
-
-            IfStatementSyntax? ifStatementSyntax = syntax as IfStatementSyntax;
-            if (ifStatementSyntax is not null)
-            {
-                return CompileIfStatementSyntax(compiler, ifStatementSyntax);
-            }
-
-            ReturnStatementSyntax? returnStatementSyntax = syntax as ReturnStatementSyntax;
-            if (returnStatementSyntax is not null)
-            {
-                return "return" + (returnStatementSyntax.Expression is null ? "" : " " + CompileExpressionSyntax(compiler, returnStatementSyntax.Expression)) + ";";
-            }
-
-            BlockSyntax? blockSyntax = syntax as BlockSyntax;
-            if (blockSyntax is not null)
-            {
-                return CompileBlockSyntax(compiler, blockSyntax);
-            }
-
-            throw new NotImplementedException();
+            MethodInfo[] methods = typeof(Declaration).GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Declaration.InitializeCompilers<StatementCompilerAttribute>(methods, sStatementCompilerMethods);
+            Declaration.InitializeCompilers<ExpressionCompilerAttribute>(methods, sExpressionCompilerMethods);
         }
 
-        static protected string CompileExpressionStatementSyntax(Compiler compiler, ExpressionStatementSyntax syntax)
+        static private void InitializeCompilers<CompilerAttributeType>(MethodInfo[] methods, Dictionary<Type, MethodInfo> collection) where CompilerAttributeType : CompilerAttribute
         {
-            AssignmentExpressionSyntax? assignmentExpressionSyntax = syntax.Expression as AssignmentExpressionSyntax;
-            if (assignmentExpressionSyntax is not null)
+            foreach (MethodInfo method in methods)
             {
-                return CompileAssignmentExpressionSyntax(compiler, assignmentExpressionSyntax) + syntax.SemicolonToken.ValueText;
-            }
-
-            throw new NotImplementedException();
-        }
-
-        static protected string CompileAssignmentExpressionSyntax(Compiler compiler, AssignmentExpressionSyntax syntax)
-        {
-            string leftContent = CompileExpressionSyntax(compiler, syntax.Left);
-            string rightContent = CompileExpressionSyntax(compiler, syntax.Right);
-            Trace.Assert(!string.IsNullOrWhiteSpace(leftContent) && !string.IsNullOrWhiteSpace(rightContent));
-            return $"{leftContent} {syntax.OperatorToken.Text} {rightContent}";
-        }
-
-        static protected string CompileExpressionSyntax(Compiler compiler, ExpressionSyntax syntax)
-        {
-            IdentifierNameSyntax? identifierNameSyntax = syntax as IdentifierNameSyntax;
-            if (identifierNameSyntax is not null)
-            {
-                string name = identifierNameSyntax.GetName();
-                Variable? variable = compiler.GetVariable(name);
-                if (variable is not null)
+                CompilerAttributeType? attribute = method.GetCustomAttribute<CompilerAttributeType>();
+                if (attribute is null)
                 {
-                    return compiler.AnalyzeVariableName(variable);
+                    continue;
                 }
 
-                Method[] methods = compiler.GetMethods(name);
-                if (methods.Length > 0)
-                {
-                    Array.ForEach(methods, m => compiler.CurrentReferenceHost.AppendReference(m));
-                    return name;
-                }
+                collection.Add(attribute.Type, method);
+            }
+        }
 
-                throw new InvalidDataException();
+        static internal string CompileSyntax(CompileContext context, SyntaxNode syntax)
+        {
+            StatementSyntax? statement = syntax as StatementSyntax;
+            if (statement is not null)
+            {
+                return CompileSyntax<StatementSyntax>(context, statement, sStatementCompilerMethods);
             }
 
-            LiteralExpressionSyntax? literalExpressionSyntax = syntax as LiteralExpressionSyntax;
+            ExpressionSyntax? expression = syntax as ExpressionSyntax;
+            if (expression is not null)
+            {
+                return CompileSyntax<ExpressionSyntax>(context, expression, sExpressionCompilerMethods);
+            }
+
+            throw new NotImplementedException($"No compiler for {syntax.GetType()}");
+        }
+
+        static internal string CompileSyntax<SyntaxType>(CompileContext context, SyntaxType syntax, Dictionary<Type, MethodInfo> collection) where SyntaxType : notnull, SyntaxNode
+        {
+            if (syntax is not SyntaxType)
+            {
+                throw new ArgumentException($"{syntax.GetType()} is not {typeof(SyntaxType)}", nameof(syntax));
+            }
+
+            MethodInfo? method = null;
+            for (Type? type = syntax.GetType(); type?.IsSubclassOf(typeof(SyntaxType)) ?? false; type = type.BaseType)
+            {
+                if (collection.TryGetValue(type, out method))
+                {
+                    break;
+                }
+            }
+
+            if (method is null)
+            {
+                throw new NotImplementedException($"No compiler for {syntax.GetType()}");
+            }
+
+            string content = method.Invoke(null, new object?[] { context, syntax }) as string ?? throw new InvalidOperationException();
+            //if (syntax.HasLeadingTrivia)
+            //{
+            //    string trivias = CompileTriviaList(context, syntax.GetLeadingTrivia());
+            //    if (!string.IsNullOrWhiteSpace(trivias))
+            //    {
+            //        content = trivias + Environment.NewLine + content;
+            //    }
+            //}
+            if (syntax.HasTrailingTrivia)
+            {
+                string trivias = CompileTriviaList(context, syntax.GetTrailingTrivia());
+                if (!string.IsNullOrWhiteSpace(trivias))
+                {
+                    content = content + " " + trivias;
+                }
+            }
+            return content;
+        }
+
+        static internal List<string> CompileBracketedArgumentListSyntax(CompileContext context, BracketedArgumentListSyntax syntax)
+        {
+            return CompileArgumentList(context, syntax.Arguments);
+        }
+
+        static internal List<string> CompileArgumentList(CompileContext context, BaseArgumentListSyntax syntax)
+        {
+            return CompileArgumentList(context, syntax.Arguments);
+        }
+
+        static internal List<string> CompileArgumentList(CompileContext context, SeparatedSyntaxList<ArgumentSyntax> syntaxList)
+        {
+            List<string> arguments = new List<string>();
+            foreach (ArgumentSyntax syntax in syntaxList)
+            {
+                IdentifierNameSyntax? identifierNameSyntax = syntax.Expression as IdentifierNameSyntax;
+                if (identifierNameSyntax is not null)
+                {
+                    ITypeHost? variable = context.Compiler.GetVariable<ITypeHost>(identifierNameSyntax.GetName());
+                    if (variable is not null)
+                    {
+                        if (typeof(InputFragment) == variable.Type)
+                        {
+                            continue;
+                        }
+                    }
+                }
+
+                arguments.Add(CompileArgumentSyntax(context, syntax));
+            }
+            return arguments;
+        }
+
+        static internal string CompileArgumentSyntax(CompileContext context, ArgumentSyntax syntax)
+        {
+            LiteralExpressionSyntax? literalExpressionSyntax = syntax.Expression as LiteralExpressionSyntax;
             if (literalExpressionSyntax is not null)
             {
-                return CompileLiteralExpressionSyntax(compiler, literalExpressionSyntax);
+                return CompileLiteralExpressionSyntax(context, literalExpressionSyntax);
             }
 
-            MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax as MemberAccessExpressionSyntax;
-            if (memberAccessExpressionSyntax is not null)
-            {
-                return CompileMemberAccessExpressionSyntax(compiler, memberAccessExpressionSyntax);
-            }
-
-            BinaryExpressionSyntax? binaryExpressionSyntax = syntax as BinaryExpressionSyntax;
-            if (binaryExpressionSyntax is not null)
-            {
-                return CompileBinaryExpressionSyntax(compiler, binaryExpressionSyntax);
-            }
-
-            ObjectCreationExpressionSyntax? objectCreationExpressionSyntax = syntax as ObjectCreationExpressionSyntax;
-            if (objectCreationExpressionSyntax is not null)
-            {
-                return CompileObjectCreationExpressionSyntax(compiler, objectCreationExpressionSyntax);
-            }
-
-            InvocationExpressionSyntax? invocationExpressionSyntax = syntax as InvocationExpressionSyntax;
-            if (invocationExpressionSyntax is not null)
-            {
-                return CompileInvocationExpressionSyntax(compiler, invocationExpressionSyntax);
-            }
-
-            ElementAccessExpressionSyntax? elementAccessExpressionSyntax = syntax as ElementAccessExpressionSyntax;
-            if (elementAccessExpressionSyntax is not null)
-            {
-                return CompileElementAccessExpressionSyntax(compiler, elementAccessExpressionSyntax);
-            }
-
-            PrefixUnaryExpressionSyntax? prefixUnaryExpressionSyntax = syntax as PrefixUnaryExpressionSyntax;
-            if (prefixUnaryExpressionSyntax is not null)
-            {
-                return prefixUnaryExpressionSyntax.OperatorToken.ValueText + CompileExpressionSyntax(compiler, prefixUnaryExpressionSyntax.Operand);
-            }
-
-            ParenthesizedExpressionSyntax? parenthesizedExpressionSyntax = syntax as ParenthesizedExpressionSyntax;
-            if (parenthesizedExpressionSyntax is not null)
-            {
-                return parenthesizedExpressionSyntax.OpenParenToken + CompileExpressionSyntax(compiler, parenthesizedExpressionSyntax.Expression) + parenthesizedExpressionSyntax.CloseParenToken;
-            }
-
-            ConditionalExpressionSyntax? conditionalExpressionSyntax = syntax as ConditionalExpressionSyntax;
-            if (conditionalExpressionSyntax is not null)
-            {
-                return $"{CompileExpressionSyntax(compiler, conditionalExpressionSyntax.Condition)} {conditionalExpressionSyntax.QuestionToken.ValueText} {CompileExpressionSyntax(compiler, conditionalExpressionSyntax.WhenTrue)} {conditionalExpressionSyntax.ColonToken.ValueText} {CompileExpressionSyntax(compiler, conditionalExpressionSyntax.WhenFalse)}";
-            }
-
-            Debugger.Break();
-            throw new NotImplementedException();
+            return CompileSyntax(context, syntax.Expression);
         }
 
-        static protected string CompileMemberAccessExpressionSyntax(Compiler compiler, MemberAccessExpressionSyntax syntax)
+        static internal string CompileMemberAccessExpressionSyntax(CompileContext context, string targetName, string memberName)
         {
-            string memberName = syntax.Name.GetName();
-            if (syntax.Expression is IdentifierNameSyntax)
-            {
-                return CompileMemberAccessExpressionSyntax(compiler, syntax.Expression.GetName(), memberName);
-            }
-
-            MemberAccessExpressionSyntax? memberAccessExpressionSyntax = syntax.Expression as MemberAccessExpressionSyntax;
-            if (memberAccessExpressionSyntax is not null)
-            {
-                string prefix = CompileMemberAccessExpressionSyntax(compiler, memberAccessExpressionSyntax) + syntax.OperatorToken.ValueText;
-                Type type = GetMemberType(compiler, memberAccessExpressionSyntax);
-                if (type.GetCustomAttribute<MemberCollectorAttribute>() is not null)
-                {
-                    return prefix + memberName;
-                }
-                return prefix + compiler.AnalyzeMemberName(type, memberName);
-            }
-
-            InvocationExpressionSyntax? invocationExpressionSyntax = syntax.Expression as InvocationExpressionSyntax;
-            if (invocationExpressionSyntax is not null)
-            {
-                string targetName = CompileInvocationExpressionSyntax(compiler, invocationExpressionSyntax);
-                Trace.Assert("." == syntax.OperatorToken.ValueText);
-                return $"{targetName}{syntax.OperatorToken.ValueText}{memberName}";
-            }
-
-            ThisExpressionSyntax? thisExpressionSyntax = syntax.Expression as ThisExpressionSyntax;
-            if (thisExpressionSyntax is not null)
-            {
-                return memberName;
-            }
-
-
-            ElementAccessExpressionSyntax? elementAccessExpressionSyntax = syntax.Expression as ElementAccessExpressionSyntax;
-            if (elementAccessExpressionSyntax is not null)
-            {
-                return $"{elementAccessExpressionSyntax.Expression.GetName()}[{string.Join(", ", CompileArgumentList(compiler, elementAccessExpressionSyntax.ArgumentList))}]" + syntax.OperatorToken.ValueText + memberName;
-            }
-
-            {
-                string targetName = syntax.Expression.GetName();
-                Trace.Assert("." == syntax.OperatorToken.ValueText);
-                //int separatorIndex = name.IndexOf('.');
-                //if (separatorIndex > -1)
-                //{
-                //    return this.GetVariable(name.Substring(0, separatorIndex));
-                //}
-
-                throw new NotImplementedException();
-            }
-        }
-
-        static protected Type GetMemberType(Compiler compiler, MemberAccessExpressionSyntax syntax)
-        {
-            ThisExpressionSyntax? thisExpressionSyntax = syntax.Expression as ThisExpressionSyntax;
-            if (thisExpressionSyntax is not null)
-            {
-                Class? classDeclaration = compiler.GetCurrent<Class>();
-                if (classDeclaration is null)
-                {
-                    throw new InvalidDataException();
-                }
-
-                return classDeclaration.Type.GetMemberType(syntax.Name.GetName());
-            }
-
-            ElementAccessExpressionSyntax? elementAccessExpressionSyntax = syntax.Expression as ElementAccessExpressionSyntax;
-            if (elementAccessExpressionSyntax is not null)
-            {
-                if (elementAccessExpressionSyntax.ArgumentList is BracketedArgumentListSyntax)
-                {
-                    Variable? variable = compiler.GetVariable(elementAccessExpressionSyntax.Expression.GetName());
-                    if (variable is null || !variable.Type.IsArray)
-                    {
-                        throw new InvalidDataException();
-                    }
-
-                    return (variable.Type.GetElementType() ?? throw new InvalidDataException("Arrays must have element type")).GetMemberType(syntax.Name.GetName());
-                }
-
-                throw new NotImplementedException();
-            }
-
-            if (syntax.Expression is IdentifierNameSyntax)
-            {
-                Variable? target = compiler.GetVariable(syntax.Expression.GetName());
-                if (target is null)
-                {
-                    throw new InvalidDataException();
-                }
-
-                return target.Type.GetMemberType(syntax.Name.GetName());
-            }
-
-            throw new NotImplementedException();
-        }
-
-        static protected string CompileLiteralExpressionSyntax(Compiler compiler, LiteralExpressionSyntax literalExpressionSyntax)
-        {
-            string valueText = literalExpressionSyntax.Token.ValueText;
-            switch ((SyntaxKind)literalExpressionSyntax.RawKind)
-            {
-                case SyntaxKind.NumericLiteralExpression:
-                    return valueText;
-            }
-
-            Debugger.Break();
-            throw new InvalidDataException();
-        }
-
-        static protected string CompileMemberAccessExpressionSyntax(Compiler compiler, string targetName, string memberName)
-        {
-            Variable? target = compiler.GetVariable(targetName);
+            Declaration? target = context.Compiler.GetVariable<Declaration>(targetName);
             if (target is not null)
             {
-                return target.AnalyzeMemberAccess(compiler, memberName);
+                ITypeHost typedTarget = target as ITypeHost ?? throw new InvalidOperationException();
+                return AnalyzeMemberAccess(context, typedTarget.Type, target, memberName);
             }
 
-            Type? type = compiler.GetType(targetName);
+            Type? type = context.Compiler.GetType(targetName);
             if (type is not null)
             {
-                return CompileMemberAccessExpressionSyntax(compiler, type, memberName);
+                return CompileMemberAccessExpressionSyntax(context, type, memberName);
             }
 
             throw new InvalidDataException();
         }
 
-        static protected string CompileMemberAccessExpressionSyntax(Compiler compiler, Type type, string memberName)
+        static internal string AnalyzeMemberAccess(CompileContext context, Type hostType, Declaration variable, string name)
+        {
+            if (typeof(InputVertex) == hostType || typeof(OutputVertex) == hostType || typeof(InputFragment) == hostType || typeof(OutputFragment) == hostType)
+            {
+                MemberInfo[] members = hostType.GetMember(name);
+                Trace.Assert(1 == members.Length);
+
+                return context.Compiler.AnalyzeMemberName(members[0]);
+            }
+
+            return $"{context.Compiler.AnalyzeVariableName(context, variable)}.{name}";
+        }
+
+        static internal string CompileMemberAccessExpressionSyntax(CompileContext context, Type type, string memberName)
         {
             MemberInfo[] members = type.GetMember(memberName);
             //Trace.Assert(1 == members.Length); maybe overload
@@ -296,14 +189,29 @@ namespace General.Shaders
             MethodInfo? methodInfo = memberInfo as MethodInfo;
             if (methodInfo is not null)
             {
-                string? methodName = methodInfo.GetFunctionName(compiler.Language);
-                return string.IsNullOrWhiteSpace(methodName) ? CompileMethodInvocation(compiler, methodInfo) : methodName;
+                context.CheckMember(methodInfo);
+                string? methodName = methodInfo.GetFunctionName(context.Language);
+                return string.IsNullOrWhiteSpace(methodName) ? CompileMethodInvocation(context, methodInfo) : methodName;
+            }
+
+            FieldInfo? fieldInfo = memberInfo as FieldInfo;
+            if (fieldInfo?.IsStatic ?? false)
+            {
+                context.CheckMember(fieldInfo);
+                return fieldInfo.Name;
+            }
+
+            PropertyInfo? propertyInfo = memberInfo as PropertyInfo;
+            if (propertyInfo is not null && ((propertyInfo.GetGetMethod() ?? propertyInfo.GetSetMethod())?.IsStatic ?? false))
+            {
+                context.CheckMember(propertyInfo);
+                return propertyInfo.Name;
             }
 
             throw new NotImplementedException();
         }
 
-        static protected string CompileMethodInvocation(Compiler compiler, MethodInfo methodInfo)
+        static internal string CompileMethodInvocation(CompileContext context, MethodInfo methodInfo)
         {
             string? declaringTypeName = methodInfo.DeclaringType?.FullName;
             if (string.IsNullOrWhiteSpace(declaringTypeName))
@@ -311,12 +219,7 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            //Type? declaringType = compiler.GetType(declaringTypeName);
-            //if (declaringType is null)
-            //{
-            //}
-
-            Class? typeClass = compiler.Global?.GetDeclaration(declaringTypeName) as Class;
+            Class? typeClass = context.Compiler.GetDeclaration<Class>(declaringTypeName);
             if (typeClass is null)
             {
                 throw new InvalidDataException();
@@ -328,159 +231,25 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            compiler.CurrentReferenceHost.AppendReference(method);
+            context.Compiler.AppendReference(method);
             return method.Name;
         }
 
-        static protected string CompileElementAccessExpressionSyntax(Compiler compiler, ElementAccessExpressionSyntax syntax)
-        {
-            string variableName = syntax.Expression.GetName();
-            List<string> arguments = CompileBracketedArgumentListSyntax(compiler, syntax.ArgumentList);
-            Trace.Assert(1 == arguments.Count);
-            return compiler.AnalyzeElementAccess(variableName, arguments[0]);
-        }
-
-        static protected List<string> CompileBracketedArgumentListSyntax(Compiler compiler, BracketedArgumentListSyntax syntax)
-        {
-            return CompileArgumentList(compiler, syntax.Arguments);
-        }
-
-        static protected string CompileBinaryExpressionSyntax(Compiler compiler, BinaryExpressionSyntax syntax)
-        {
-            string leftContent = CompileExpressionSyntax(compiler, syntax.Left);
-            string rightContent = CompileExpressionSyntax(compiler, syntax.Right);
-            Trace.Assert(!string.IsNullOrWhiteSpace(leftContent) && !string.IsNullOrWhiteSpace(rightContent));
-            return $"{leftContent} {syntax.OperatorToken.Text} {rightContent}";
-        }
-
-        static protected string CompileObjectCreationExpressionSyntax(Compiler compiler, ObjectCreationExpressionSyntax syntax)
-        {
-            Trace.Assert("new" == syntax.NewKeyword.Text);
-
-            Type? type = syntax.GetTypeFromRoot(syntax.Type.GetName());
-            if (type is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            string typeName = type.GetShaderTypeName(compiler.Language);
-            if (syntax.ArgumentList is not null)
-            {
-                ArgumentList argumentList = new ArgumentList(syntax.ArgumentList);
-                List<string> arguments = argumentList.Compile(compiler);
-                if (0 == arguments.Count)
-                {
-                    TypeNameAttribute? typeNameAttribute = type.GetCustomAttribute<TypeNameAttribute>();
-                    if (!string.IsNullOrWhiteSpace(typeNameAttribute?.DefaultConstructor))
-                    {
-                        return typeNameAttribute.DefaultConstructor;
-                    }
-                }
-                return $"{typeName}({string.Join(", ", arguments)})";
-            }
-
-            throw new NotImplementedException();
-        }
-
-        static protected string CompileInvocationExpressionSyntax(Compiler compiler, InvocationExpressionSyntax syntax)
-        {
-            string method = CompileExpressionSyntax(compiler, syntax.Expression);
-            List<string> arguments = CompileArgumentList(compiler, syntax.ArgumentList);
-            return $"{method}({string.Join(", ", arguments)})";
-        }
-
-        static protected List<string> CompileArgumentList(Compiler compiler, BaseArgumentListSyntax syntax)
-        {
-            return CompileArgumentList(compiler, syntax.Arguments);
-        }
-
-        static protected List<string> CompileArgumentList(Compiler compiler, SeparatedSyntaxList<ArgumentSyntax> syntaxList)
-        {
-            List<string> arguments = new List<string>();
-            foreach (ArgumentSyntax syntax in syntaxList)
-            {
-                IdentifierNameSyntax? identifierNameSyntax = syntax.Expression as IdentifierNameSyntax;
-                if (identifierNameSyntax is not null)
-                {
-                    Variable? variable = compiler.GetVariable(identifierNameSyntax.GetName());
-                    if (variable is not null)
-                    {
-                        if (typeof(InputFragment) == variable.Type)
-                        {
-                            continue;
-                        }
-                    }
-                }
-
-                arguments.Add(CompileArgumentSyntax(compiler, syntax));
-            }
-            return arguments;
-        }
-
-        static protected string CompileArgumentSyntax(Compiler compiler, ArgumentSyntax syntax)
-        {
-            LiteralExpressionSyntax? literalExpressionSyntax = syntax.Expression as LiteralExpressionSyntax;
-            if (literalExpressionSyntax is not null)
-            {
-                return CompileLiteralExpressionSyntax(compiler, literalExpressionSyntax);
-            }
-
-            return CompileExpressionSyntax(compiler, syntax.Expression);
-        }
-
-        static protected string CompileLocalDeclarationStatementSyntax(Compiler compiler, LocalDeclarationStatementSyntax syntax)
-        {
-            if (!string.IsNullOrWhiteSpace(syntax.UsingKeyword.ValueText))
-            {
-                throw new NotImplementedException();
-            }
-
-            VariableDeclarationSyntax? variableDeclarationSyntax = syntax.Declaration as VariableDeclarationSyntax;
-            if (variableDeclarationSyntax is not null)
-            {
-                return CompileVariableDeclarationSyntax(compiler, variableDeclarationSyntax);
-            }
-
-            throw new NotImplementedException();
-        }
-
-        static protected string CompileIfStatementSyntax(Compiler compiler, IfStatementSyntax syntax)
-        {
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine(compiler.TabCount, $"if ({CompileExpressionSyntax(compiler, syntax.Condition)})");
-            builder.AppendLine(compiler.TabCount, CompileStatement(compiler, syntax.Statement).Trim());
-            return builder.ToString();
-        }
-
-        static protected string CompileBlockSyntax(Compiler compiler, BlockSyntax syntax)
-        {
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine(compiler.TabCount, syntax.OpenBraceToken.ValueText);
-            compiler.IncreaseTabCount();
-            foreach (StatementSyntax statement in syntax.Statements)
-            {
-                builder.AppendLine(compiler.TabCount, CompileStatement(compiler, statement).Trim());
-            }
-            compiler.DecreaseTabCount();
-            builder.Append(compiler.TabCount, syntax.CloseBraceToken.ValueText);
-            return builder.ToString();
-        }
-
-        static private string CompileVariableDeclarationSyntax(Compiler compiler, VariableDeclarationSyntax syntax)
+        static internal string CompileVariableDeclarationSyntax(CompileContext context, VariableDeclarationSyntax syntax)
         {
             string typeName = syntax.Type.GetName();
-            Type? type = compiler.GetType(typeName);
+            Type? type = context.Compiler.GetType(typeName);
             if (type is null)
             {
                 throw new InvalidDataException();
             }
 
-            string shaderTypeName = type.GetShaderTypeName(compiler.Language);
-            List<string> variables = CompileVariableDeclaratorSyntaxList(compiler, syntax.Type, syntax.Variables);
+            string shaderTypeName = type.GetShaderTypeName(context.Language);
+            List<string> variables = CompileVariableDeclaratorSyntaxList(context, syntax.Type, syntax.Variables);
             return $"{shaderTypeName} {string.Join(", ", variables)};";
         }
 
-        static private List<string> CompileVariableDeclaratorSyntaxList(Compiler compiler, TypeSyntax typeSyntax, SeparatedSyntaxList<VariableDeclaratorSyntax> syntaxList)
+        static internal List<string> CompileVariableDeclaratorSyntaxList(CompileContext context, TypeSyntax typeSyntax, SeparatedSyntaxList<VariableDeclaratorSyntax> syntaxList)
         {
             List<string> variables = new List<string>();
             foreach (VariableDeclaratorSyntax syntax in syntaxList)
@@ -491,18 +260,69 @@ namespace General.Shaders
                     throw new NotImplementedException();
                 }
 
-                string initializer = CompileEqualsValueClauseSyntax(compiler, syntax.Initializer);
+                string initializer = CompileEqualsValueClauseSyntax(context, syntax.Initializer);
                 variables.Add($"{variableName} {initializer}");
-                compiler.CurrentVariableCollection.PushVariable(new Variable(typeSyntax, syntax));
+                context.Compiler.PushVariable(typeSyntax, syntax);
             }
             return variables;
         }
 
-        static private string CompileEqualsValueClauseSyntax(Compiler compiler, EqualsValueClauseSyntax syntax)
+        static internal string CompileEqualsValueClauseSyntax(CompileContext context, EqualsValueClauseSyntax syntax)
         {
             string equalsToken = syntax.EqualsToken.ValueText;
-            string value = CompileExpressionSyntax(compiler, syntax.Value);
+            string value = CompileSyntax(context, syntax.Value);
             return $"{equalsToken} {value}";
+        }
+
+        static internal string CompileTriviaList(CompileContext context, SyntaxTriviaList trivias)
+        {
+            foreach (SyntaxTrivia trivia in trivias)
+            {
+                string content = trivia.ToString();
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
+                    {
+                        return content.Trim();
+                    }
+                    else
+                    {
+                        Debugger.Break();
+                    }
+                }
+            }
+            return "";
+        }
+
+        static internal Type AnalyzeType(PropertyDeclarationSyntax syntax)
+        {
+            if (syntax.Type is null)
+            {
+                throw new InvalidDataException();
+            }
+
+            return Declaration.AnalyzeType(syntax.Type);
+        }
+
+        static internal Type AnalyzeType(FieldDeclarationSyntax syntax)
+        {
+            throw new NotImplementedException();
+        }
+
+        static internal Type AnalyzeType(ParameterSyntax syntax)
+        {
+            if (syntax.Type is null)
+            {
+                throw new InvalidDataException();
+            }
+
+            return Declaration.AnalyzeType(syntax.Type);
+        }
+
+        static internal Type AnalyzeType(TypeSyntax type)
+        {
+            string typeName = type.GetName();
+            return Compiler.GetType(typeName, type) ?? throw new InvalidDataException("Variables must have specific type");
         }
     }
 }

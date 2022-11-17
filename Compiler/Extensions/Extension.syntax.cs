@@ -2,11 +2,14 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using General.Shaders;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 static public partial class Extension
@@ -33,6 +36,36 @@ static public partial class Extension
         if (methodDeclarationSyntax is not null)
         {
             return GetName(methodDeclarationSyntax);
+        }
+
+        AttributeSyntax? attributeSyntax = syntax as AttributeSyntax;
+        if (attributeSyntax is not null)
+        {
+            return attributeSyntax.Name.GetName();
+        }
+
+        ArgumentSyntax? argumentSyntax = syntax as ArgumentSyntax;
+        if (argumentSyntax is not null)
+        {
+            return argumentSyntax.Expression.GetName();
+        }
+
+        FieldDeclarationSyntax? fieldDeclarationSyntax = syntax as FieldDeclarationSyntax;
+        if (fieldDeclarationSyntax is not null)
+        {
+            return fieldDeclarationSyntax.ToString();
+        }
+
+        PropertyDeclarationSyntax? propertyDeclarationSyntax = syntax as PropertyDeclarationSyntax;
+        if (propertyDeclarationSyntax is not null)
+        {
+            return propertyDeclarationSyntax.Identifier.ValueText;
+        }
+
+        ClassDeclarationSyntax? classDeclarationSyntax = syntax as ClassDeclarationSyntax;
+        if (classDeclarationSyntax is not null)
+        {
+            return classDeclarationSyntax.Identifier.ValueText;
         }
 
         throw new NotImplementedException();
@@ -80,6 +113,36 @@ static public partial class Extension
         if (predefinedTypeSyntax is not null)
         {
             return predefinedTypeSyntax.Keyword.ValueText;
+        }
+
+        Debugger.Break();
+        throw new NotImplementedException();
+    }
+
+    static public string GetSafeName(this TypeSyntax syntax)
+    {
+        IdentifierNameSyntax? identifierNameSyntax = syntax as IdentifierNameSyntax;
+        if (identifierNameSyntax is not null)
+        {
+            return identifierNameSyntax.GetName();
+        }
+
+        ArrayTypeSyntax? arrayTypeSyntax = syntax as ArrayTypeSyntax;
+        if (arrayTypeSyntax is not null)
+        {
+            return arrayTypeSyntax.ElementType.GetName() + "[]";
+        }
+
+        PredefinedTypeSyntax? predefinedTypeSyntax = syntax as PredefinedTypeSyntax;
+        if (predefinedTypeSyntax is not null)
+        {
+            return predefinedTypeSyntax.Keyword.ValueText;
+        }
+
+        QualifiedNameSyntax? qualifiedNameSyntax = syntax as QualifiedNameSyntax;
+        if (qualifiedNameSyntax is not null)
+        {
+            return qualifiedNameSyntax.Right.GetSafeName();
         }
 
         Debugger.Break();
@@ -216,8 +279,18 @@ static public partial class Extension
         return Find(members, name) as T;
     }
 
+    static public Type? GetTypeFromRoot(this SyntaxNode syntax)
+    {
+        return syntax.GetTypeFromRoot(syntax.GetName());
+    }
+
     static public Type? GetTypeFromRoot(this SyntaxNode syntax, string name)
     {
+        if ("int" == name)
+        {
+            return typeof(int);
+        }
+
         CompilationUnitSyntax? root = syntax.SyntaxTree.GetRoot() as CompilationUnitSyntax;
         if (root is null)
         {
@@ -235,8 +308,12 @@ static public partial class Extension
             }
             if (!string.IsNullOrWhiteSpace(space))
             {
-                string fullTypeName = space + "." + name;
-                type = Extension.GetType(fullTypeName);
+                type = Extension.GetType(space + "." + name);
+                while (type is null && space.Contains("."))
+                {
+                    space = space.Substring(0, space.LastIndexOf('.'));
+                    type = Extension.GetType(space + "." + name);
+                }
             }
             if (type is null)
             {
@@ -291,14 +368,94 @@ static public partial class Extension
         return syntax.Parent?.GetCurrentNamespace();
     }
 
-    static public Attribute ToAttribute(this AttributeSyntax syntax)
+    static internal object? ToInstance(this SyntaxNode syntax)
     {
-        Type? type = syntax.GetTypeFromRoot(syntax.Name.GetName());
-        if (type is null)
+        ExpressionSyntax? expressionSyntax = syntax as ExpressionSyntax;
+        if (expressionSyntax is not null)
         {
-            throw new InvalidDataException();
+            return Declaration.ToInstance(expressionSyntax);
+        }
+
+        AttributeArgumentSyntax? attributeArgumentSyntax = syntax as AttributeArgumentSyntax;
+        if (attributeArgumentSyntax is not null)
+        {
+            return ToInstance(attributeArgumentSyntax.Expression);
+        }
+
+        AttributeSyntax? attributeSyntax = syntax as AttributeSyntax;
+        if (attributeSyntax is not null)
+        {
+            return ToInstance(attributeSyntax);
         }
 
         throw new NotImplementedException();
+    }
+
+    static internal bool Match(this ParameterInfo parameter, object? argument)
+    {
+        Type parameterType = parameter.ParameterType;
+        if (null == argument)
+        {
+            return !parameterType.IsValueType;
+        }
+
+        Type argumentType = argument.GetType();
+        return argumentType == parameterType || argumentType.IsSubclassOf(parameterType);
+    }
+
+    static internal bool MatchParameters(ParameterInfo[] parameters, object?[]? arguments)
+    {
+        if (0 == parameters.Length &&(arguments is null || 0 == arguments.Length))
+        {
+            return true;
+        }
+
+        if (parameters.Length != arguments?.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < parameters.Length; ++i)
+        {
+            if (!parameters[i].Match(arguments[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static internal object CreateInstance(ConstructorInfo[] constructors, object?[]? arguments)
+    {
+        ConstructorInfo? constructor = constructors.FirstOrDefault(c => MatchParameters(c.GetParameters(), arguments));
+        return constructor?.Invoke(arguments) ?? throw new InvalidOperationException();
+    }
+
+    static internal object CreateInstance(Type type, object?[]? arguments)
+    {
+        ConstructorInfo[] constructors = type.GetConstructors((BindingFlags)int.MaxValue);
+        ConstructorInfo? constructor = constructors.FirstOrDefault(c => MatchParameters(c.GetParameters(), arguments));
+        return constructor?.Invoke(arguments) ?? throw new InvalidOperationException();
+    }
+
+    static internal System.Attribute ToInstance(this AttributeSyntax syntax)
+    {
+        Type type = syntax.GetTypeFromRoot(syntax.GetName() + nameof(System.Attribute)) ?? throw new InvalidOperationException();
+        return CreateInstance(type, syntax.ArgumentList?.Arguments.ToArguments())as System.Attribute ?? throw new InvalidOperationException();
+    }
+
+    static internal object?[]? ToArguments(this IEnumerable<SyntaxNode>? syntaxList)
+    {
+        if (syntaxList is null)
+        {
+            return null;
+        }
+
+        List<object?> arguments = new List<object?>();
+        foreach (SyntaxNode argumentSyntax in syntaxList)
+        {
+            arguments.Add(argumentSyntax.ToInstance());
+        }
+        return arguments.ToArray();
     }
 }

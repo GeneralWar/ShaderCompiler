@@ -20,6 +20,7 @@ namespace General.Shaders
         private const string OUTPUT_VERTEX_NAME = "outputVertex";
         private const string INPUT_FRAGMENT_NAME = "inputFragment";
 
+        private const string EXTENSION_PLACE_HOLDER = "{extension_place_holder}";
         private const string STRUCT_CONTENT_PLACE_HOLDER = "{struct_content_place_holder}";
         private const string UNIFORM_CONTENT_PLACE_HOLDER = "{uniform_content_place_holder}";
 
@@ -32,7 +33,7 @@ namespace General.Shaders
 
         protected override string internalAnalyzeOutputVertexMemberName(MemberInfo memberInfo, OutputVertexAttribute attribute)
         {
-            if (OutputField.Position == attribute.Field && memberInfo.GetCustomAttribute<LayoutLocationAttribute>() is null)
+            if (OutputField.TransformedPosition == attribute.Field)
             {
                 return "gl_Position";
             }
@@ -76,9 +77,10 @@ namespace General.Shaders
             return memberInfo.Name;
         }
 
-        protected override string internalAnalyzeVariableName(Variable variable)
+        internal override string internalAnalyzeVariableName(Declaration variable)
         {
-            if (typeof(InputFragment) == variable.Type)
+            Type? type = (variable as ITypeHost)?.Type;
+            if (typeof(InputFragment) == type)
             {
                 return INPUT_FRAGMENT_NAME;
             }
@@ -97,18 +99,56 @@ namespace General.Shaders
             throw new NotImplementedException();
         }
 
-        protected override string internalCompileVertexShader(Type type, VertexShaderAttribute attribute)
+        internal override Class internalCompileVertexShader(Type type, VertexShaderAttribute attribute)
         {
-            Class? instance = this.Global?.GetDeclaration(type.FullName ?? throw new InvalidDataException()) as Class;
+            Class? instance = this.GetDeclaration<Class>(type.FullName ?? throw new InvalidDataException());
             if (instance is null)
             {
                 throw new InvalidDataException();
             }
 
-            return this.compileGraphicsShader(attribute, instance, nameof(IVertexSource.OnVertex), Path.Join(this.OutputDirectory, attribute.Path + ".vert"));
+            instance.SetOutputFilename(Path.GetFullPath(Path.Join(this.OutputDirectory, attribute.Path + ".vert")));
+            this.compileGraphicsShaderModule(attribute, instance, nameof(IVertexSource.OnVertex), instance.OutputFilename ?? "");
+            return instance;
         }
 
-        private string compileGraphicsShader(ShaderPathAttribute pathAttribute, Class shaderInstance, string methodName, string outputFileName)
+        internal override Class internalCompileFragmentShader(Type type, FragmentShaderAttribute attribute)
+        {
+            Class? instance = this.GetDeclaration<Class>(type.FullName ?? throw new InvalidDataException());
+            if (instance is null)
+            {
+                throw new InvalidDataException();
+            }
+
+            instance.SetOutputFilename(Path.GetFullPath(Path.Join(this.OutputDirectory, attribute.Path + ".frag")));
+            this.compileGraphicsShaderModule(attribute, instance, nameof(IFragmentSource.OnFragment), instance.OutputFilename ?? "");
+            return instance;
+        }
+
+        internal override void internalCompileGraphicsShader(Type shaderType, Type vertexShaderType, Type fragmentShaderType)
+        {
+            GraphicsShaderAttribute? shaderAttribute = shaderType.GetCustomAttribute<GraphicsShaderAttribute>();
+            if (shaderAttribute is null)
+            {
+                //throw new InvalidDataException();
+                Compiler.LogWarning($"No {nameof(GraphicsShaderAttribute)} for {shaderType}, ignore it");
+                return;
+            }
+
+            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
+            this.groupComponents(shader, vertexShaderType, fragmentShaderType);
+            shader.polygonTypes = Array.ConvertAll(shaderType.GetCustomAttributes<PolygonTypeAttribute>().ToArray(), a => a.polygonType);
+
+            string filename = Path.Join(this.OutputDirectory, shaderAttribute.Path + ".shader");
+            DataContractJsonSerializer serailizer = new DataContractJsonSerializer(shader.GetType());
+            using (MemoryStream stream = new MemoryStream())
+            {
+                serailizer.WriteObject(stream, shader);
+                File.WriteAllBytes(filename, stream.ToArray());
+            }
+        }
+
+        private void compileGraphicsShaderModule(ShaderPathAttribute pathAttribute, Class shaderInstance, string methodName, string outputFileName)
         {
             string? directory = Path.GetDirectoryName(outputFileName);
             if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
@@ -122,24 +162,28 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            GLSLCompileContext context = new GLSLCompileContext();
-            this.PushScope(shaderInstance);
+            Method mainMethod = methods[0];
+            GLSLCompileContext context = new GLSLCompileContext(this, shaderInstance);
+            bool push = this.PushScope(shaderInstance);
 
             string headerContent = this.declareHeader(context, shaderInstance, methods[0]);
-            string methodContent = this.declareShaderMainMethod(context, shaderInstance, methods[0]);
+            string methodContent = this.declareModuleMainMethod(context, shaderInstance, methods[0]);
 
             // should compile references before constants, referenced methods may need constants
             StringBuilder referenceBuilder = new StringBuilder();
             this.declareReferences(context, shaderInstance.References);
-            this.declareReferences(context, methods[0].References);
+            this.declareReferences(context, mainMethod.References);
             if (context.References.Count() > 0)
             {
                 referenceBuilder.AppendLine(string.Join(Environment.NewLine, context.References));
             }
 
+            ComponentData componentData = this.getComponentData(shaderInstance.Type);
+
             StringBuilder builder = new StringBuilder();
+            headerContent = headerContent.Replace(EXTENSION_PLACE_HOLDER, componentData.Extensions.Count > 0 ? (string.Join(Environment.NewLine, componentData.Extensions.Select(e => $"#extension {e} : enable")) + Environment.NewLine) : "");
             headerContent = headerContent.Replace(STRUCT_CONTENT_PLACE_HOLDER, context.Structures.Count() > 0 ? (string.Join(Environment.NewLine, context.Structures) + Environment.NewLine) : "");
-            headerContent = headerContent.Replace(UNIFORM_CONTENT_PLACE_HOLDER, context.Uniforms.Count() > 0 ? (string.Join(Environment.NewLine, context.Uniforms) + Environment.NewLine) : "");
+            headerContent = headerContent.Replace(UNIFORM_CONTENT_PLACE_HOLDER, context.Uniforms.Count() > 0 ? (string.Join(Environment.NewLine, context.Uniforms.Select(u => u.Content ?? throw new InvalidOperationException("Uniform property must have content"))) + Environment.NewLine) : "");
             builder.AppendLine(headerContent);
 
             string constantContent = string.Join(Environment.NewLine, context.PushConstants);
@@ -163,15 +207,14 @@ namespace General.Shaders
                 throw new InvalidDataException();
             }
 
-            this.PopScope(shaderInstance);
+            if (push)
+            {
+                this.PopScope(shaderInstance);
+            }
 
             File.WriteAllText(outputFileName, content);
 
-            string message = $"Compile shader [{pathAttribute.Path}] to {outputFileName}";
-            Console.WriteLine(message);
-            Trace.WriteLine(message);
-
-            return Path.GetFullPath(outputFileName);
+            Compiler.Log($"Compile [{pathAttribute.Path}]({shaderInstance.FullName}) to {outputFileName}");
         }
 
         private string declareHeader(GLSLCompileContext context, Class instance, Method method)
@@ -182,6 +225,7 @@ namespace General.Shaders
             {
                 builder.AppendLine("#extension GL_ARB_separate_shader_objects : enable");
             }
+            builder.Append(EXTENSION_PLACE_HOLDER);
             builder.AppendLine();
 
             builder.Append(STRUCT_CONTENT_PLACE_HOLDER);
@@ -202,7 +246,7 @@ namespace General.Shaders
         {
             foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo || m is Type))
             {
-                if (memberInfo.GetMemberType().GetCustomAttribute<UniformTypeAttribute>() is null && memberInfo.GetCustomAttribute<UniformNameAttribute>() is null)
+                if (memberInfo.GetMemberType().GetCustomAttribute<UniformTypeAttribute>() is null && memberInfo.GetCustomAttribute<UniformUsageAttribute>() is null)
                 {
                     continue;
                 }
@@ -219,24 +263,46 @@ namespace General.Shaders
             }
         }
 
-        public void declareAsUniformData(GLSLCompileContext context, Type componentType, MemberInfo memberInfo, string instanceName, ICustomAttributeProvider attributeProvider)
+        private void declareAsUniformData(GLSLCompileContext context, Type componentType, MemberInfo memberInfo, string instanceName, ICustomAttributeProvider attributeProvider)
         {
             Type memberType = memberInfo.GetMemberType();
-            string memberName = memberInfo.Name;
-            if (string.IsNullOrWhiteSpace(memberName))
-            {
-                throw new InvalidDataException();
-            }
-
             string shaderTypeName = memberType.GetShaderTypeName(this.Language);
             if (string.IsNullOrWhiteSpace(shaderTypeName))
             {
                 throw new InvalidDataException();
             }
 
-            UniformNameAttribute? nameAttribute = memberInfo.GetCustomAttribute<UniformNameAttribute>();
-            string uniformName = $"Uniform{shaderTypeName}";
-            if (memberType.IsArray)
+            UniformTypeAttribute? typeAttribute = memberType.GetCustomAttribute<UniformTypeAttribute>() ?? attributeProvider.GetCustomAttributes(typeof(UniformTypeAttribute), false).Select(a => a as UniformTypeAttribute).FirstOrDefault();
+            if (typeAttribute is null)
+            {
+                Compiler.LogWarning($"No {nameof(UniformTypeAttribute)} for member {memberInfo}, ignore it");
+                return;
+            }
+
+            UniformUsageAttribute? usageAttribute = memberInfo.GetCustomAttribute<UniformUsageAttribute>() ?? attributeProvider.GetCustomAttributes(typeof(UniformUsageAttribute), false).Select(a => a as UniformUsageAttribute).FirstOrDefault();
+            if (usageAttribute is null)
+            {
+                Compiler.LogWarning($"No {nameof(UniformUsageAttribute)} for member {memberInfo}, ignore it");
+                return;
+            }
+
+            UniformProperty uniform = new UniformProperty(typeAttribute, usageAttribute, componentType, memberType, instanceName);
+            if (context.ContainsUniform(uniform.UniformName))
+            {
+                return;
+            }
+
+            uniform.SetContent(this.CompileUniformContent(context, uniform, attributeProvider));
+            this.CurrentComponentData?.AddUniformProperty(uniform);
+            context.AddUniform(uniform);
+        }
+
+        public string CompileUniformContent(GLSLCompileContext context, UniformProperty uniform, ICustomAttributeProvider attributeProvider)
+        {
+            Type sourceType = uniform.SourceType;
+            string shaderTypeName = sourceType.GetShaderTypeName(this.Language);
+            string uniformPrefix = $"layout(binding = {uniform.PlaceHolder}) uniform";
+            if (sourceType.IsArray)
             {
                 ArraySizeAttribute? arraySizeAttribute = attributeProvider.GetCustomAttributes(typeof(ArraySizeAttribute), false).Select(a => a as ArraySizeAttribute).FirstOrDefault();
                 if (arraySizeAttribute is null)
@@ -244,55 +310,43 @@ namespace General.Shaders
                     throw new InvalidDataException();
                 }
 
-                Type elementType = memberType.GetElementType() ?? throw new InvalidDataException();
+                Type elementType = sourceType.GetElementType() ?? throw new InvalidDataException();
                 this.declareAsStruct(context, elementType, shaderTypeName);
 
                 StringBuilder builder = new StringBuilder();
-                builder.AppendLine($"layout(binding = {{binding-{memberName}}}) uniform {uniformName}");
+                builder.AppendLine($"{uniformPrefix} {uniform.UniformName}");
                 builder.AppendLine("{");
-                builder.AppendLine(1, $"{shaderTypeName} {instanceName}[{arraySizeAttribute.ElementCount}];");
+                builder.AppendLine(1, $"{shaderTypeName} {uniform.InstanceName}[{arraySizeAttribute.ElementCount}];");
                 builder.AppendLine("};");
-                context.AddUniform(uniformName, builder.ToString());
+                return builder.ToString();
             }
             else
             {
-                if (memberType.GetMembers().Where(m => m.GetCustomAttribute<UniformFieldAttribute>() is not null).Count() > 0)
+                if (sourceType.GetMembers().Where(m => m.GetCustomAttribute<UniformFieldAttribute>() is not null).Count() > 0)
                 {
-                    this.declareAsStruct(context, memberType, shaderTypeName);
+                    this.declareAsStruct(context, sourceType, shaderTypeName);
 
                     StringBuilder builder = new StringBuilder();
-                    builder.AppendLine($"layout(binding = {{binding-{memberName}}}) uniform {uniformName}");
+                    builder.AppendLine($"{uniformPrefix} {uniform.UniformName}");
                     builder.AppendLine("{");
-                    builder.AppendLine(1, $"{shaderTypeName} {instanceName};");
+                    builder.AppendLine(1, $"{shaderTypeName} {uniform.InstanceName};");
                     builder.AppendLine("};");
-                    context.AddUniform(uniformName, builder.ToString());
+                    return builder.ToString();
                 }
-                else if (typeof(Sampler2D) != memberType)
+                else if (typeof(Sampler2D) != sourceType)
                 {
-                    if (nameAttribute is null)
-                    {
-                        throw new InvalidDataException("GLSL can only declare Sampler2D and Image as simple uniform, others must have block");
-                    }
-
                     StringBuilder builder = new StringBuilder();
-                    builder.AppendLine($"layout(binding = {{binding-{memberName}}}) uniform Uniform{nameAttribute.Name}");
+                    builder.AppendLine($"{uniformPrefix} Uniform{uniform.UniformName}");
                     builder.AppendLine("{");
-                    builder.AppendLine(1, $"{shaderTypeName} {instanceName};");
+                    builder.AppendLine(1, $"{shaderTypeName} {uniform.InstanceName};");
                     builder.AppendLine("};");
-                    context.AddUniform(uniformName, builder.ToString());
+                    return builder.ToString();
                 }
                 else
                 {
-                    context.AddUniform(uniformName, $"layout(binding = {{binding-{memberName}}}) uniform {shaderTypeName} {instanceName};" + Environment.NewLine);
+                    return $"{uniformPrefix} {shaderTypeName} {uniform.InstanceName};" + Environment.NewLine;
                 }
             }
-
-            UniformProperty uniform = new UniformProperty(componentType, memberType, memberName);
-            if (nameAttribute is not null)
-            {
-                uniform.SetPublicName(nameAttribute.Name);
-            }
-            this.getComponentData(componentType).AddUniformProperty(uniform);
         }
 
         private void declareUniformDataMembers(GLSLCompileContext context, StringBuilder builder, Type uniformType)
@@ -305,10 +359,10 @@ namespace General.Shaders
 #pragma warning restore CS8602 // 解引用可能出现空引用。
                 builder.AppendLine(); // append new line here, confirm no broken line if there is no member
                 builder.AppendLine("{");
-                foreach (MemberInfo dataMemberInfo in members)
+                foreach (MemberInfo member in members)
                 {
                     builder.Append("\t");
-                    builder.AppendLine(this.declareUniformMember(context, dataMemberInfo));
+                    builder.AppendLine(this.declareUniformMember(context, member));
                 }
                 builder.Append("}");
             }
@@ -316,16 +370,26 @@ namespace General.Shaders
 
         private void declareAsStruct(GLSLCompileContext context, Type type, string shaderTypeName)
         {
+            if (context.ContainsStruct(shaderTypeName))
+            {
+                return;
+            }
+
             StringBuilder builder = new StringBuilder();
             builder.Append($"struct {shaderTypeName}");
             this.declareUniformDataMembers(context, builder, type);
             builder.AppendLine(";");
-            context.AddStruct(shaderTypeName, builder.ToString());
+            context.AddStructure(shaderTypeName, builder.ToString());
         }
 
         public string declareUniformMember(GLSLCompileContext context, MemberInfo memberInfo)
         {
             Type type = memberInfo.GetMemberType();
+            UniformTypeAttribute? attribute = type.GetCustomAttribute<UniformTypeAttribute>();
+            if (attribute is not null && UniformType.Custom == attribute.Type)
+            {
+                this.declareAsStruct(context, type, type.Name);
+            }
             return $"{type.GetShaderTypeName(this.Language)} {memberInfo.Name};";
         }
 
@@ -363,13 +427,12 @@ namespace General.Shaders
             foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo))
             {
                 InputVertexAttribute? inputAttribute = memberInfo.GetCustomAttribute<InputVertexAttribute>();
-                LayoutLocationAttribute? locationAttribute = memberInfo.GetCustomAttribute<LayoutLocationAttribute>();
-                if (inputAttribute is null || locationAttribute is null)
+                if (inputAttribute is null)
                 {
                     throw new InvalidDataException();
                 }
 
-                members.Add(locationAttribute.Index, $"layout(location = {locationAttribute.Index}) in {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.AnalyzeMemberName(memberInfo)};");
+                members.Add(members.Count, $"layout(location = {members.Count}) in {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.AnalyzeMemberName(memberInfo)};");
             }
             return string.Join(Environment.NewLine, members.Values) + Environment.NewLine;
         }
@@ -390,13 +453,10 @@ namespace General.Shaders
                     throw new InvalidDataException();
                 }
 
-                LayoutLocationAttribute? locationAttribute = memberInfo.GetCustomAttribute<LayoutLocationAttribute>();
-                if (locationAttribute is null)
+                if (OutputField.TransformedPosition != outputAttribute.Field)
                 {
-                    continue;
+                    members.Add(members.Count, $"\tlayout(location = {members.Count}) {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.analyzeOutputVertexMemberShortName(memberInfo, memberInfo.GetCustomAttribute<OutputVertexAttribute>() ?? throw new InvalidDataException())};");
                 }
-
-                members.Add(locationAttribute.Index, $"\tlayout(location = {locationAttribute.Index}) {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.analyzeOutputVertexMemberShortName(memberInfo, memberInfo.GetCustomAttribute<OutputVertexAttribute>() ?? throw new InvalidDataException())};");
             }
             builder.AppendJoin(Environment.NewLine, members.Values);
             builder.AppendLine();
@@ -404,25 +464,14 @@ namespace General.Shaders
             return builder.ToString();
         }
 
-        private string declareShaderMainMethod(GLSLCompileContext context, Class instance, Method method)
+        private string declareModuleMainMethod(GLSLCompileContext context, Class instance, Method method)
         {
             StringBuilder builder = new StringBuilder();
             builder.AppendLine("void main()");
             builder.AppendLine("{");
-            builder.AppendLine(method.CompileMethodBody(this));
+            builder.AppendLine(method.CompileMethodBody(context));
             builder.AppendLine("}");
             return builder.ToString();
-        }
-
-        protected override string internalCompileFragmentShader(Type type, FragmentShaderAttribute attribute)
-        {
-            Class? instance = this.Global?.GetDeclaration(type.FullName ?? throw new InvalidDataException()) as Class;
-            if (instance is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            return this.compileGraphicsShader(attribute, instance, nameof(IFragmentSource.OnFragment), Path.Join(this.OutputDirectory, attribute.Path + ".frag"));
         }
 
         private string declareInputFragment(GLSLCompileContext context, Type type)
@@ -441,13 +490,7 @@ namespace General.Shaders
                     throw new InvalidDataException();
                 }
 
-                LayoutLocationAttribute? locationAttribute = memberInfo.GetCustomAttribute<LayoutLocationAttribute>();
-                if (locationAttribute is null)
-                {
-                    continue;
-                }
-
-                members.Add(locationAttribute.Index, $"\tlayout(location = {locationAttribute.Index}) {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.analyzeInputFragmentMemberShortName(memberInfo, memberInfo.GetCustomAttribute<InputFragmentAttribute>() ?? throw new InvalidDataException())};");
+                members.Add(members.Count, $"\tlayout(location = {members.Count}) {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.analyzeInputFragmentMemberShortName(memberInfo, memberInfo.GetCustomAttribute<InputFragmentAttribute>() ?? throw new InvalidDataException())};");
             }
             builder.AppendJoin(Environment.NewLine, members.Values);
             builder.AppendLine();
@@ -463,61 +506,54 @@ namespace General.Shaders
             foreach (MemberInfo memberInfo in type.GetMembers().Where(m => m is FieldInfo || m is PropertyInfo))
             {
                 OutputFragmentAttribute? outputAttribute = memberInfo.GetCustomAttribute<OutputFragmentAttribute>();
-                LayoutLocationAttribute? locationAttribute = memberInfo.GetCustomAttribute<LayoutLocationAttribute>();
-                if (outputAttribute is null || locationAttribute is null)
+                if (outputAttribute is null)
                 {
                     throw new InvalidDataException();
                 }
 
-                members.Add(locationAttribute.Index, $"layout(location = {locationAttribute.Index}) out {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.AnalyzeMemberName(memberInfo)};");
+                members.Add(members.Count, $"layout(location = {members.Count}) out {memberInfo.GetMemberType().GetShaderTypeName(this.Language)} {this.AnalyzeMemberName(memberInfo)};");
             }
             return string.Join(Environment.NewLine, members.Values) + Environment.NewLine;
-        }
-
-        internal override void compileGraphicsShader(Type shaderType, Type vertexShaderType, Type fragmentShaderType)
-        {
-            GraphicsShaderAttribute? shaderAttribute = shaderType.GetCustomAttribute<GraphicsShaderAttribute>();
-            if (shaderAttribute is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
-            this.groupComponents(shader, vertexShaderType, fragmentShaderType);
-            shader.polygonTypes = Array.ConvertAll(shaderType.GetCustomAttributes<PolygonTypeAttribute>().ToArray(), a => a.polygonType);
-
-            string filename = Path.Join(this.OutputDirectory, shaderAttribute.Path + ".shader");
-            DataContractJsonSerializer serailizer = new DataContractJsonSerializer(shader.GetType());
-            using (MemoryStream stream = new MemoryStream())
-            {
-                serailizer.WriteObject(stream, shader);
-                File.WriteAllBytes(filename, stream.ToArray());
-            }
         }
 
         private void groupComponents(ShaderConfig shader, Type vertexShaderType, Type fragmentShaderType)
         {
             List<UniformProperty> uniforms = new List<UniformProperty>();
-            uniforms.AddRange(this.getComponentData(vertexShaderType).Uniforms);
-            uniforms.AddRange(this.getComponentData(fragmentShaderType).Uniforms);
-            uniforms = uniforms.Distinct().ToList();
-
             string safeFileName = shader.key.Replace(Path.DirectorySeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_');
-            shader.vertexShader = this.createComponent(safeFileName, this.FindVertexShaderPath(vertexShaderType), uniforms);
-            shader.fragmentShader = this.createComponent(safeFileName, this.FindFragmentShaderPath(fragmentShaderType), uniforms);
+            shader.vertexShader = this.createComponent(safeFileName, this.FindVertexShaderPath(vertexShaderType), vertexShaderType, uniforms);
+            shader.fragmentShader = this.createComponent(safeFileName, this.FindFragmentShaderPath(fragmentShaderType), fragmentShaderType, uniforms);
             shader.uniforms = uniforms.Select(u => u.ToDeclaration()).ToArray();
         }
 
-        private string createComponent(string safeFileName, string templatePath, List<UniformProperty> uniforms)
+        /// <summary>
+        /// replace uniform place holder with certain uniform content
+        /// </summary>
+        private string groupUniform(string content, Type componentType, List<UniformProperty> shaderUniforms)
         {
-            string content = File.ReadAllText(templatePath);
-            for (int i = 0; i < uniforms.Count; ++i)
+            ComponentData data = this.getComponentData(componentType);
+            HashSet<UniformProperty> uniforms = new HashSet<UniformProperty>(data.Uniforms);
+            Class declaration = this.GetDeclaration<Class>(componentType.FullName ?? throw new InvalidDataException()) ?? throw new InvalidOperationException();
+            foreach (Declaration reference in Compiler.GetAllReferences(declaration))
             {
-                UniformProperty uniform = uniforms[i];
-                string holder = $"{{binding-{uniform.PropertyName}}}";
-                content = content.Replace(holder, i.ToString());
+                Class? referenceClass = reference as Class;
+                if (referenceClass is not null)
+                {
+                    ComponentData referenceData = this.getComponentData(referenceClass.Type);
+                    uniforms.AddRange(referenceData.Uniforms);
+                    continue;
+                }
             }
+            foreach (UniformProperty uniform in uniforms)
+            {
+                content = content.Replace(uniform.PlaceHolder, shaderUniforms.Count.ToString());
+                shaderUniforms.Add(uniform);
+            }
+            return content;
+        }
 
+        private string createComponent(string safeFileName, string templatePath, Type shaderType, List<UniformProperty> shaderUniforms)
+        {
+            string content = this.groupUniform(File.ReadAllText(templatePath), shaderType, shaderUniforms);
             string directory = Path.Join(Path.GetDirectoryName(templatePath), Path.GetFileNameWithoutExtension(templatePath));
             if (!Directory.Exists(directory))
             {
@@ -536,7 +572,7 @@ namespace General.Shaders
                 Method? method = r as Method;
                 if (method is not null)
                 {
-                    context.AddReference(method.MethodName, this.declareFunction(context, method));
+                    context.AddReference(method.MethodName, method, this.declareFunction(context, method));
                 }
             }
         }
@@ -547,10 +583,17 @@ namespace General.Shaders
             TypeSyntax returnTypeSyntax = method.ReturnType;
             Type returnType = this.GetType(returnTypeSyntax.GetName()) ?? throw new InvalidDataException();
 
-            string bodyContent = method.CompileMethodBody(this);
+            bool push = this.PushScope(method.DeclaringClass);
+
+            string bodyContent = method.CompileMethodBody(context);
             if (method.References.Count > 0)
             {
                 this.declareReferences(context, method.References);
+            }
+
+            if (push)
+            {
+                this.PopScope(method.DeclaringClass);
             }
 
             builder.AppendLine($"{returnType.GetShaderTypeName(this.Language)} {method.Name}({this.declareFunctionParameters(context, method)})");
@@ -589,9 +632,9 @@ namespace General.Shaders
                 UniformTypeAttribute? uniformTypeAttribute = parameterInfo.GetCustomAttribute<UniformTypeAttribute>();
                 if (uniformTypeAttribute is not null)
                 {
-                    Type currentClass = this.GetCurrent<Class>()?.Type ?? throw new InvalidOperationException("There must be more than one class");
+                    Type currentComponent = this.CurrentComponentData?.Type ?? throw new InvalidOperationException("There must be more than one class");
                     string parameterName = parameterInfo.Name ?? throw new InvalidDataException("Parameters must have name");
-                    this.declareAsUniformData(context, currentClass, parameterInfo.ParameterType, parameterName, parameterInfo);
+                    this.declareAsUniformData(context, currentComponent, parameterInfo.ParameterType, parameterName, parameterInfo);
                     continue;
                 }
 
@@ -603,10 +646,14 @@ namespace General.Shaders
 
         private void declarePushConstant(GLSLCompileContext context, ParameterInfo parameterInfo)
         {
-            string constantName;
             Type type = parameterInfo.ParameterType;
-            StringBuilder builder = new StringBuilder();
-            if (type.IsArray)
+            if (this.IsPrimitiveType(type))
+            {
+                string name = parameterInfo.Name ?? throw new InvalidDataException("Constant must have name");
+                string constantName = $"Constant{char.ToUpper(name[0]) + name.Substring(1)}";
+                context.AddPushConstant(constantName, this.declareComplexPushConstant(context, type, constantName, $"{type.GetShaderTypeName(this.Language)} {parameterInfo.Name};"));
+            }
+            else if (type.IsArray)
             {
                 ArraySizeAttribute? arraySizeAttribute = parameterInfo.GetCustomAttribute<ArraySizeAttribute>();
                 if (arraySizeAttribute is null)
@@ -615,25 +662,29 @@ namespace General.Shaders
                 }
 
                 Type elementType = type.GetElementType() ?? throw new InvalidDataException();
-                constantName = $"Constant{elementType.Name}s";
-                builder.AppendLine(this.declarePushConstantStruct(context, elementType));
-                builder.AppendLine();
-                builder.AppendLine($"layout(push_constant) uniform {constantName}");
-                builder.AppendLine("{");
-                builder.AppendLine(1, $"{elementType.Name} {parameterInfo.Name}[{arraySizeAttribute.ElementCount}];");
-                builder.AppendLine("};");
+                string constantName = $"Constant{elementType.Name}s";
+                context.AddPushConstant(constantName, this.declareComplexPushConstant(context, elementType, constantName, $"{elementType.GetShaderTypeName(this.Language)} {parameterInfo.Name}[{arraySizeAttribute.ElementCount}];"));
             }
             else
             {
-                constantName = $"Constant{type.Name}";
-                builder.AppendLine(this.declarePushConstantStruct(context, type));
-                builder.AppendLine();
-                builder.AppendLine($"layout(push_constant) uniform {constantName}");
-                builder.AppendLine("{");
-                builder.AppendLine(1, $"{type.Name} {parameterInfo.Name};");
-                builder.AppendLine("};");
+                string constantName = $"Constant{type.Name}";
+                context.AddPushConstant(constantName, this.declareComplexPushConstant(context, type, constantName, $"{type.GetShaderTypeName(this.Language)} {parameterInfo.Name};"));
             }
-            context.AddPushConstant(constantName, builder.ToString().TrimEnd());
+        }
+
+        private string declareComplexPushConstant(GLSLCompileContext context, Type constantType, string constantName, string constantContent)
+        {
+            StringBuilder builder = new StringBuilder();
+            if (!this.IsPrimitiveType(constantType))
+            {
+                builder.AppendLine(this.declarePushConstantStruct(context, constantType));
+                builder.AppendLine();
+            }
+            builder.AppendLine($"layout(push_constant) uniform {constantName}");
+            builder.AppendLine("{");
+            builder.AppendLine(1, constantContent);
+            builder.AppendLine("};");
+            return builder.ToString().TrimEnd();
         }
 
         private string declarePushConstantStruct(GLSLCompileContext context, Type type)

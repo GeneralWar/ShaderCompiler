@@ -1,24 +1,41 @@
-﻿using System.Runtime.InteropServices;
+﻿// Author: 朱嘉灵(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 
 namespace General.Shaders
 {
     public enum UniformType
     {
-        Transform,
+        None,
+
+        Transform, // internal custom
         Sampler2D,
         Vector4,
 
-        AmbientLight,
-        DirectionalLightArray,
-        PointLightArray,
-        SpoitLightArray,
+        SubpassInput = 1 << 4,
 
         Custom = 0xffff,
     }
 
+    public enum InternalUniformUsage
+    {
+        None,
+
+        Transform,
+        MainColor,
+        Diffuse,
+
+        SamplerColor,
+        SamplerPosition,
+        SamplerNormal,
+    }
+
     public enum ShaderStage
     {
+        None,
         VertexShader,
         FragmentShader,
     }
@@ -29,18 +46,20 @@ namespace General.Shaders
     {
         [DataMember] public UniformType Type;
         [DataMember] public ShaderStage Stage;
+        [DataMember] public int Usage;
         [DataMember] [MarshalAs(UnmanagedType.LPStr)] public string? Name;
 
-        public UniformDeclaration(UniformType type, ShaderStage stage, string? name)
+        public UniformDeclaration(UniformType type, ShaderStage stage, int usage, string? name)
         {
             this.Type = type;
+            this.Usage = usage;
             this.Stage = stage;
             this.Name = name;
         }
 
         public override string ToString()
         {
-            return $"{(string.IsNullOrWhiteSpace(this.Name) ? "(NoName)" : this.Name)}, {this.Type}, {this.Stage}";
+            return $"{(string.IsNullOrWhiteSpace(this.Name) ? "(NoName)" : this.Name)}, {this.Type}, {this.Stage}, {this.Usage}";
         }
     }
 }

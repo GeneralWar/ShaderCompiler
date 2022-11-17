@@ -13,7 +13,7 @@ using System.Reflection;
 
 static public partial class Extension
 {
-    static public bool ImplementInterface<TInterfaceType>(this Type type)
+    static public bool ImplementedInterface<TInterfaceType>(this Type type)
     {
         Type interfaceType = typeof(TInterfaceType);
         if (!interfaceType.IsInterface)
@@ -22,6 +22,11 @@ static public partial class Extension
         }
 
         return type.GetInterface(interfaceType.FullName ?? interfaceType.Name) == interfaceType;
+    }
+
+    static public bool IsShaderComponent(this Type type)
+    {
+        return type.ImplementedInterface<IVertexSource>() || type.ImplementedInterface<IFragmentSource>();
     }
 
     static public Type GetMemberType(this Type type, string name)
@@ -87,6 +92,11 @@ static public partial class Extension
 
     static public string GetShaderTypeName(this Type type, Language language)
     {
+        if (typeof(void) == type)
+        {
+            return "void";
+        }
+
         if (type.IsArray)
         {
             return GetShaderTypeName(type.GetElementType() ?? throw new InvalidDataException("Array must has element type"), language);

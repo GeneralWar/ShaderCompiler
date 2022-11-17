@@ -4,7 +4,7 @@
 
 namespace General.Shaders.Uniforms
 {
-    [UniformType]
+    [UniformType(UniformType.Sampler2D)]
     [TypeName(Language.GLSL, "sampler2D")]
     public class Sampler2D { }
 }

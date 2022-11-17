@@ -5,13 +5,10 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
 
 namespace General.Shaders
 {
-    public class Variable : Declaration
+    internal class Variable : Declaration, ITypeHost
     {
         private SyntaxNode? mSyntax = null;
 
@@ -19,86 +16,37 @@ namespace General.Shaders
         private string mTypeString;
         public Type Type => mType;
 
-        public Variable(PropertyDeclarationSyntax syntax) : base(syntax.Identifier.ValueText)
+        //public Variable(DeclarationContainer root, PropertyDeclarationSyntax syntax) : base(root, syntax.Identifier.ValueText)
+        //{
+        //    mSyntax = syntax;
+        //    mType = Declaration.AnalyzeType(syntax);
+        //    mTypeString = mType.FullName ?? mType.Name;
+        //}
+
+        //public Variable(DeclarationContainer root, FieldDeclarationSyntax syntax) : base(root, syntax.ToString())
+        //{
+        //    mSyntax = syntax;
+        //    mType = Declaration.AnalyzeType(syntax);
+        //    mTypeString = mType.FullName ?? mType.Name;
+        //}
+
+        public Variable(DeclarationContainer root, ParameterSyntax syntax) : base(root, syntax, syntax.Identifier.ValueText)
         {
             mSyntax = syntax;
-            mType = this.analyzeType(syntax);
+            mType = Declaration.AnalyzeType(syntax);
             mTypeString = mType.FullName ?? mType.Name;
         }
 
-        public Variable(FieldDeclarationSyntax syntax) : base(syntax.ToString())
+        public Variable(DeclarationContainer root, TypeSyntax type, VariableDeclaratorSyntax syntax) : base(root, syntax, syntax.Identifier.ValueText)
         {
             mSyntax = syntax;
-            mType = this.analyzeType(syntax);
-            mTypeString = mType.FullName ?? mType.Name;
-        }
-
-        public Variable(ParameterSyntax syntax) : base(syntax.Identifier.ValueText)
-        {
-            mSyntax = syntax;
-            mType = this.analyzeType(syntax);
-            mTypeString = mType.FullName ?? mType.Name;
-        }
-
-        public Variable(TypeSyntax type, VariableDeclaratorSyntax syntax) : base(syntax.Identifier.ValueText)
-        {
-            mSyntax = syntax;
-            mType = this.analyzeType(type);
+            mType = Declaration.AnalyzeType(type);
             mTypeString = mType.FullName ?? mType.Name;
         }
 
         protected override void internalAnalyze()
         {
             //throw new NotImplementedException();
-        }
-
-        private Type analyzeType(PropertyDeclarationSyntax syntax)
-        {
-            if (syntax.Type is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            return this.analyzeType(syntax.Type);
-        }
-
-        private Type analyzeType(FieldDeclarationSyntax syntax)
-        {
-            throw new NotImplementedException();
-        }
-
-        private Type analyzeType(ParameterSyntax syntax)
-        {
-            if (syntax.Type is null)
-            {
-                throw new InvalidDataException();
-            }
-
-            return this.analyzeType(syntax.Type);
-        }
-
-        private Type analyzeType(TypeSyntax type)
-        {
-            string typeName = type.GetName();
-            return this.getTypeByTypeName(typeName);
-        }
-
-        private Type getTypeByTypeName(string name)
-        {
-            return Compiler.GetType(name, mSyntax) ?? throw new InvalidDataException("Variables must have specific type");
-        }
-
-        public string AnalyzeMemberAccess(Compiler compiler, string name)
-        {
-            if (typeof(InputVertex) == this.Type || typeof(OutputVertex) == this.Type || typeof(InputFragment) == this.Type || typeof(OutputFragment) == this.Type)
-            {
-                MemberInfo[] members = mType.GetMember(name);
-                Trace.Assert(1 == members.Length);
-
-                return compiler.AnalyzeMemberName(members[0]);
-            }
-            
-            return $"{compiler.AnalyzeVariableName(this)}.{name}";
         }
 
         public override string ToString()

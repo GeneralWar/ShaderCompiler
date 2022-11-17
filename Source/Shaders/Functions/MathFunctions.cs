@@ -1,4 +1,8 @@
-﻿using System;
+﻿// Author: 朱嘉灵(General)
+// Email: generalwar@outlook.com
+// Copyright (C) General. Licensed under LGPL-2.1.
+
+using System;
 
 namespace General.Shaders
 {
@@ -21,7 +25,7 @@ namespace General.Shaders
         [FunctionName(Language.GLSL, "sqrt")]
         static public float Sqrt(Vector4 v) => throw new NotImplementedException();
 
-        /// <returns>0.0 is returned if x[i] < edge[i], and 1.0 is returned otherwise</returns>
+        /// <returns>0.0 is returned if x[i] &lt; edge[i], and 1.0 is returned otherwise</returns>
         [FunctionName(Language.GLSL, "step")]
         static public float Step(float edge, float v) => throw new NotImplementedException();
 

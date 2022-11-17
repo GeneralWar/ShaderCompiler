@@ -5,7 +5,5 @@
 namespace General.Shaders
 {
     [TypeName(Language.GLSL, "mat4", DefaultConstructor = "mat4(0)")]
-    public struct Matrix4
-    {
-    }
+    public struct Matrix4 { }
 }

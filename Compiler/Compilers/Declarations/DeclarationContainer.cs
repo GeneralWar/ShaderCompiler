@@ -15,9 +15,9 @@ namespace General.Shaders
     {
         private Dictionary<string, Declaration> mChildren = new Dictionary<string, Declaration>();
 
-        public DeclarationContainer(string name) : base(name) { }
+        public DeclarationContainer(DeclarationContainer root, SyntaxNode syntax, string name) : base(root, syntax, name) { }
 
-        public DeclarationContainer(string name, string fullName) : base(name, fullName) { }
+        public DeclarationContainer(DeclarationContainer root, SyntaxNode syntax, string name, string fullName) : base(root, syntax, name, fullName) { }
 
         public Declaration RegisterMember(SyntaxNode syntax)
         {
@@ -87,24 +87,27 @@ namespace General.Shaders
         {
             this.checkDeclarationCanAdd(declaration);
 
-            string fullName = declaration.FullName;
-            if (fullName.Contains('.'))
+            if (declaration is not Member)
             {
-                int lastDotIndex = fullName.LastIndexOf('.');
-                string parentName = fullName.Substring(0, lastDotIndex);
-                if (this.FullName == parentName)
+                string fullName = declaration.FullName;
+                if (fullName.Contains('.'))
                 {
-                    this.addDeclarationDirectly(declaration);
-                    return;
-                }
+                    int lastDotIndex = fullName.LastIndexOf('.');
+                    string parentName = fullName.Substring(0, lastDotIndex);
+                    if (this.FullName == parentName)
+                    {
+                        this.addDeclarationDirectly(declaration);
+                        return;
+                    }
 
-                Declaration? parent = this.GetDeclaration(parentName);
-                if (parent is null || parent is not DeclarationContainer)
-                {
-                    throw new InvalidDataException();
-                }
+                    Declaration? parent = this.GetDeclaration(parentName) ?? this.Root.GetDeclaration(parentName);
+                    if (parent is null || parent is not DeclarationContainer)
+                    {
+                        throw new InvalidDataException();
+                    }
 
-                (parent as DeclarationContainer)?.AddDeclaration(declaration);
+                    (parent as DeclarationContainer)?.AddDeclaration(declaration);
+                }
             }
 
             this.addDeclarationDirectly(declaration);
@@ -116,6 +119,25 @@ namespace General.Shaders
             {
                 child.Analyze();
             }
+        }
+
+        protected virtual void analyzeProperty(PropertyDeclarationSyntax syntax)
+        {
+            Property property = new Property(this.Root, this, syntax);
+            //Declaration.AnalyzeAttributes(this, property, syntax.AttributeLists); // analyze in Member constructor, so comment this line
+            this.AddDeclaration(property);
+        }
+
+        protected virtual void analyzeField(FieldDeclarationSyntax syntax)
+        {
+            Field field = new Field(this.Root, this, syntax);
+            //Declaration.AnalyzeAttributes(this, field, syntax.AttributeLists); // analyze in Member constructor, so comment this line
+            this.AddDeclaration(field);
+        }
+
+        protected virtual void analyzeClass(ClassDeclarationSyntax syntax)
+        {
+            this.AddDeclaration(new Class(this.Root, syntax));
         }
     }
 }

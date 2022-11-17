@@ -7,16 +7,30 @@ using System;
 namespace General.Shaders
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Parameter)]
-    public class UniformTypeAttribute : Attribute { }
-
-    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-    public class UniformNameAttribute : Attribute
+    public class UniformTypeAttribute : Attribute
     {
-        public string Name { get; private set; }
+        public UniformType Type { get; private set; }
 
-        public UniformNameAttribute(string name)
+        public UniformTypeAttribute() : this(UniformType.Custom) { }
+
+        public UniformTypeAttribute(UniformType type)
         {
-            this.Name = name;
+            this.Type = type;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+    public class UniformUsageAttribute : Attribute
+    {
+        public int Usage { get; private set; }
+        public string? DisplayName { get; set; }
+
+        public UniformUsageAttribute(int usage) : this(usage, null) { }
+
+        public UniformUsageAttribute(int usage, string? displayName)
+        {
+            this.Usage = usage;
+            this.DisplayName = displayName;
         }
     }
 

@@ -16,9 +16,11 @@ namespace General.Shaders
         private HashSet<NamespaceDeclarationSyntax> mSyntaxNodes = new HashSet<NamespaceDeclarationSyntax>();
         private HashSet<NamespaceDeclarationSyntax> mAnalyzedSyntaxNodes = new HashSet<NamespaceDeclarationSyntax>();
 
-        public Namespace(string name) : base(name, name) { }
+#pragma warning disable CS8625 // 无法将 null 字面量转换为非 null 的引用类型。
+        public Namespace(string name) : base(null, null, name, name) { }
+#pragma warning restore CS8625 // 无法将 null 字面量转换为非 null 的引用类型。
 
-        public Namespace(NamespaceDeclarationSyntax syntax) : base(syntax.Name.GetName(), syntax.Name.GetFullName())
+        public Namespace(DeclarationContainer root, NamespaceDeclarationSyntax syntax) : base(root, syntax, syntax.Name.GetSafeName(), syntax.Name.GetFullName())
         {
             this.appendSyntax(syntax);
         }
@@ -74,7 +76,7 @@ namespace General.Shaders
 
         public override Namespace RegisterNamespace(NamespaceDeclarationSyntax syntax)
         {
-            Namespace instance = new Namespace(syntax);
+            Namespace instance = new Namespace(this.Root, syntax);
             this.AddDeclaration(instance);
             return instance;
         }
@@ -98,7 +100,7 @@ namespace General.Shaders
 
         public override Class RegisterClass(ClassDeclarationSyntax syntax)
         {
-            Class instance = new Class(syntax);
+            Class instance = new Class(this.Root, syntax);
             this.AddDeclaration(instance);
             return instance;
         }
