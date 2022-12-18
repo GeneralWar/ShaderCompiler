@@ -17,6 +17,8 @@ namespace General.Shaders
 
         SubpassInput = 1 << 4,
 
+        Buffer = 1 << 6,
+
         Custom = 0xffff,
     }
 
@@ -38,6 +40,7 @@ namespace General.Shaders
         None,
         VertexShader,
         FragmentShader,
+        ComputeShader,
     }
 
     [DataContract]
