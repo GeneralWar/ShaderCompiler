@@ -3,6 +3,7 @@
 // Copyright (C) General. Licensed under LGPL-2.1.
 
 using General.Shaders;
+using General.Shaders.Maths;
 using General.Shaders.Uniforms;
 
 namespace Shaders
@@ -16,8 +17,8 @@ namespace Shaders
         {
             Vector4 inputPosition = new Vector4(input.position.xyz, 1.0f);
             output.transformedPosition = this.transform.mvpMatrix * inputPosition;
-            output.position = this.transform.modelmatrix * inputPosition;
-            output.normal = new Vector4(MathFunctions.Normalize(this.transform.modelmatrix * new Vector4(input.normal.xyz, .0f)).xyz, 1.0f); // fragment will be discard if alpha is 0
+            output.position = this.transform.modelMatrix * inputPosition;
+            output.normal = new Vector4(MathFunctions.Normalize(this.transform.modelMatrix * new Vector4(input.normal.xyz, .0f)).xyz, 1.0f); // fragment will be discard if alpha is 0
             output.color = input.color;
             output.uv0 = input.uv0;
         }

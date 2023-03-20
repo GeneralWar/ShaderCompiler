@@ -5,7 +5,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace General.Shaders
+namespace General.Shaders.Maths
 {
     [MemberCollector]
     [TypeName(Language.GLSL, "vec2", DefaultConstructor = "vec2(0)")]

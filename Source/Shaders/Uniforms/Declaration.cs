@@ -27,11 +27,23 @@ namespace General.Shaders
         None,
 
         Transform,
+        /// <summary>
+        /// vertex color
+        /// </summary>
         MainColor,
         Diffuse,
 
+        /// <summary>
+        /// sampler to save color
+        /// </summary>
         SamplerColor,
+        /// <summary>
+        /// sampler to save position
+        /// </summary>
         SamplerPosition,
+        /// <summary>
+        /// sampler to save normal
+        /// </summary>
         SamplerNormal,
     }
 

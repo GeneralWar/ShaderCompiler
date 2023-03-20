@@ -2,6 +2,8 @@
 // Email: generalwar@outlook.com
 // Copyright (C) General. Licensed under LGPL-2.1.
 
+using General.Shaders.Maths;
+
 namespace General.Shaders
 {
     public class InputVertex

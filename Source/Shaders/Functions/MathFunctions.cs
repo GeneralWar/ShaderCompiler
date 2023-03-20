@@ -4,7 +4,7 @@
 
 using System;
 
-namespace General.Shaders
+namespace General.Shaders.Maths
 {
     static public class MathFunctions
     {

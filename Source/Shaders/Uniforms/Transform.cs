@@ -9,6 +9,6 @@ namespace General.Shaders.Uniforms
     public class Transform
     {
         [UniformField(typeof(Transform), 0)] public Matrix4 mvpMatrix { get; }
-        [UniformField(typeof(Transform), 1)] public Matrix4 modelmatrix { get; }
+        [UniformField(typeof(Transform), 1)] public Matrix4 modelMatrix { get; }
     }
 }
