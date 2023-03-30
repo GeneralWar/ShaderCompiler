@@ -137,6 +137,7 @@ namespace General.Shaders
 
             ShaderConfig shader = new ShaderConfig(shaderAttribute.Path, shaderAttribute.Type, shaderAttribute.Queue);
             this.groupComponents(shader, vertexShaderType, fragmentShaderType);
+            shader.polygonMode = shaderAttribute.PolygonMode;
             shader.polygonTypes = Array.ConvertAll(shaderType.GetCustomAttributes<PolygonTypeAttribute>().ToArray(), a => a.polygonType);
 
             string filename = Path.Join(this.OutputDirectory, shaderAttribute.Path + ".shader");

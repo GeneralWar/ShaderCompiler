@@ -14,6 +14,7 @@ namespace General.Shaders
         [DataMember] public string? fragmentShader = null;
         [DataMember] public RenderType type;
         [DataMember] public int queue;
+        [DataMember] public PolygonMode polygonMode;
         [DataMember] public PolygonType[] polygonTypes = new PolygonType[0];
         [DataMember] public UniformDeclaration[] uniforms = new UniformDeclaration[0];
 

@@ -17,10 +17,11 @@ namespace Shaders
         {
             Vector4 inputPosition = new Vector4(input.position.xyz, 1.0f);
             output.transformedPosition = this.transform.mvpMatrix * inputPosition;
-            output.position = this.transform.modelMatrix * inputPosition;
-            output.normal = new Vector4(MathFunctions.Normalize(this.transform.modelMatrix * new Vector4(input.normal.xyz, .0f)).xyz, 1.0f); // fragment will be discard if alpha is 0
+            output.worldPosition = this.transform.modelMatrix * inputPosition;
+            output.worldNormal = new Vector4(MathFunctions.Normalize(this.transform.modelMatrix * new Vector4(input.normal.xyz, .0f)).xyz, 1.0f); // fragment will be discard if alpha is 0
             output.color = input.color;
             output.uv0 = input.uv0;
+            DebugFunctions.Log("in: %v4f, out: %v4f", inputPosition, output.transformedPosition);
         }
     }
 
@@ -33,8 +34,8 @@ namespace Shaders
         void IFragmentSource.OnFragment(InputFragment input, OutputFragment output)
         {
             output.color = ShaderFunctions.MapTexture(this.diffuse, input.uv0) * this.mainColor * input.color;
-            output.position = input.position;
-            output.normal = input.normal; 
+            output.position = input.worldPosition;
+            output.normal = input.worldNormal; 
         }
     }
 
@@ -48,13 +49,13 @@ namespace Shaders
         {
             Vector4 textureColor = ShaderFunctions.MapTexture(this.diffuse, input.uv0);
             output.color = new Vector4(textureColor.rgb * this.mainColor.rgb * input.color.rgb * input.color.a, 1.0f);
-            output.position = input.position;
-            output.normal = input.normal;
+            output.position = input.worldPosition;
+            output.normal = input.worldNormal;
         }
     }
 
     [PolygonType(PolygonType.TriangleList)]
-    [GraphicsShader("Default/TransparentDiffuse", RenderType.Transparent, RenderQueue.Transparent)]
+    [GraphicsShader("Default/TransparentDiffuse", RenderType.Transparent, PolygonMode.Fill, RenderQueue.Transparent)]
     public class DefaultDiffuseTransparentGraphicsShader : GraphicsShader
     {
         public override IVertexSource VertexShader => new DefaultVertexShader();
@@ -63,8 +64,17 @@ namespace Shaders
     }
 
     [PolygonType(PolygonType.TriangleList)]
-    [GraphicsShader("Default/OpaqueDiffuse", RenderType.Opaque, RenderQueue.Geometry)]
+    [GraphicsShader("Default/OpaqueDiffuse", RenderType.Opaque, PolygonMode.Fill, RenderQueue.Geometry)]
     public class DefaultDiffuseOpaqueGraphicsShader : GraphicsShader
+    {
+        public override IVertexSource VertexShader => new DefaultVertexShader();
+
+        public override IFragmentSource FragmentShader => new DefaultDiffuseOpaqueFragmentShader();
+    }
+
+    [PolygonType(PolygonType.TriangleList)]
+    [GraphicsShader("Default/OpaqueWireframe", RenderType.Opaque, PolygonMode.Line, RenderQueue.Geometry)]
+    public class DefaultOpaqueWireframeGraphicsShader : GraphicsShader
     {
         public override IVertexSource VertexShader => new DefaultVertexShader();
 

@@ -34,13 +34,15 @@ namespace General.Shaders
     {
         public int Queue { get; set; }
         public RenderType Type { get; set; }
+        public PolygonMode PolygonMode { get; set; }
 
-        public GraphicsShaderAttribute(string path, RenderType type, int queue) : base(path)
+        public GraphicsShaderAttribute(string path, RenderType type, PolygonMode polygonMode, int queue) : base(path)
         {
             this.Type = type;
             this.Queue = queue;
+            this.PolygonMode = polygonMode;
         }
 
-        public GraphicsShaderAttribute(string path, RenderType type, RenderQueue queue) : this(path, type, (int)queue) { }
+        public GraphicsShaderAttribute(string path, RenderType type, PolygonMode polygonMode, RenderQueue queue) : this(path, type, polygonMode, (int)queue) { }
     }
 }

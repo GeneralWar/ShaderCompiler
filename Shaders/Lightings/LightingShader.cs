@@ -37,7 +37,7 @@ namespace Shaders.Lightings
     }
 
     [PolygonType(PolygonType.TriangleList)]
-    [GraphicsShader("Internal/Lightings/Default", RenderType.Opaque, RenderQueue.Geometry)]
+    [GraphicsShader("Internal/Lightings/Default", RenderType.Opaque, PolygonMode.Fill, RenderQueue.Geometry)]
     internal class LightingShader : GraphicsShader
     {
         public override IVertexSource VertexShader => new DefaultLightingVertex();

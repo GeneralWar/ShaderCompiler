@@ -13,4 +13,11 @@ namespace General.Shaders
         TriangleStrip,
         TriangleFan,
     }
+
+    public enum PolygonMode 
+    {
+        Point,
+		Line,
+		Fill,
+	}
 }
