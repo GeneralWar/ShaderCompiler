@@ -21,7 +21,7 @@ namespace Shaders
             output.worldNormal = new Vector4(MathFunctions.Normalize(this.transform.modelMatrix * new Vector4(input.normal.xyz, .0f)).xyz, 1.0f); // fragment will be discard if alpha is 0
             output.color = input.color;
             output.uv0 = input.uv0;
-            DebugFunctions.Log("in: %v4f, out: %v4f", inputPosition, output.transformedPosition);
+            //DebugFunctions.Log("in: %v4f, out: %v4f", inputPosition, output.transformedPosition);
         }
     }
 

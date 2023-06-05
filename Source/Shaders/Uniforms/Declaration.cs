@@ -59,13 +59,17 @@ namespace General.Shaders
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
     public struct UniformDeclaration
     {
+        [DataMember] public int Set;
         [DataMember] public UniformType Type;
         [DataMember] public ShaderStage Stage;
         [DataMember] public int Usage;
         [DataMember] [MarshalAs(UnmanagedType.LPStr)] public string? Name;
 
-        public UniformDeclaration(UniformType type, ShaderStage stage, int usage, string? name)
+        public UniformDeclaration(UniformType type, ShaderStage stage, int usage, string? name) : this(0, type, stage, usage, name) { }
+
+        public UniformDeclaration(int set, UniformType type, ShaderStage stage, int usage, string? name)
         {
+            this.Set = set;
             this.Type = type;
             this.Usage = usage;
             this.Stage = stage;
